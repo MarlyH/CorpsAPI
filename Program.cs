@@ -4,6 +4,7 @@ using CorpsAPI.Models;
 using CorpsAPI.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Configuration;
 
 namespace CorpsAPI
 {
@@ -12,7 +13,7 @@ namespace CorpsAPI
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
-
+            
             // Add services to the container.
 
             builder.Services.AddControllers();
