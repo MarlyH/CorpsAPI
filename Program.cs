@@ -33,6 +33,9 @@ namespace CorpsAPI
             builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
             builder.Services.AddTransient<EmailService>();
 
+            // register memory cache for pswd reset OTPs
+            builder.Services.AddMemoryCache();
+
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();

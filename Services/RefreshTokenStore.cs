@@ -3,7 +3,8 @@
     public static class RefreshTokenStore
     {
         // key = jti
-        // value = userId
-        public static Dictionary<string, string> Tokens = new();
+        // value = sub (userId)
+        // TODO: make thread-safe and move to memory cache
+        public static Dictionary<string, string> RefreshTokens = new();
     }
 }

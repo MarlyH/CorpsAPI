@@ -1,6 +1,6 @@
 ﻿namespace CorpsAPI.DTOs
 {
-    public class ResendEmailDTO
+    public class ResendEmailDto
     {
         public string Email { get; set; }
     }

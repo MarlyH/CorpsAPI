@@ -5,6 +5,7 @@ using CorpsAPI.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -21,17 +22,21 @@ namespace CorpsAPI.Controllers
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
         private readonly EmailService _emailService;
-        private readonly Dictionary<string, string> _refreshTokenStore = RefreshTokenStore.Tokens;
+        private readonly Dictionary<string, string> _refreshTokenStore = RefreshTokenStore.RefreshTokens;
+        private readonly IMemoryCache _otpMemoryCache;
 
-        public AuthController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, EmailService emailService)
+        public AuthController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, EmailService emailService, IMemoryCache otpMemoryCache)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _emailService = emailService;
+            _otpMemoryCache = otpMemoryCache;
         }
 
+        // TODO: all checks against email should be changed to id since email can be updated
+
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDTO dto)
+        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
             var user = new AppUser 
             { 
@@ -58,7 +63,7 @@ namespace CorpsAPI.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDTO dto)
+        public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
             // check email
@@ -95,7 +100,7 @@ namespace CorpsAPI.Controllers
 
             var accessTokenString = GenerateAccessToken(user, credentials);
             var refreshTokenString = GenerateRefreshToken(user, credentials);
-
+            
             return Ok(new
             {
                 accessToken = accessTokenString,
@@ -103,6 +108,8 @@ namespace CorpsAPI.Controllers
             });
         }
 
+        // TODO: implement expiry time
+        // TODO: make post? (exposing token with GET)
         [HttpGet("confirm-email")]
         public async Task<IActionResult> ConfirmEmail(string userId, string token)
         {
@@ -115,7 +122,7 @@ namespace CorpsAPI.Controllers
         }
 
         [HttpPost("resend-verification")]
-        public async Task<IActionResult> ResendVerification([FromBody] ResendEmailDTO dto)
+        public async Task<IActionResult> ResendVerification([FromBody] ResendEmailDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null) return NotFound("Invalid email address");
@@ -136,7 +143,7 @@ namespace CorpsAPI.Controllers
 
         // TODO: redo 401 return messages
         [HttpPost("refresh")]
-        public async Task<IActionResult> Refresh([FromBody] RefreshDTO dto)
+        public async Task<IActionResult> Refresh([FromBody] RefreshDto dto)
         {
             // check for refresh token
             if (string.IsNullOrEmpty(dto.RefreshToken)) return BadRequest("Refresh token is required");
@@ -209,6 +216,68 @@ namespace CorpsAPI.Controllers
             }
         }
 
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null || !await _userManager.IsEmailConfirmedAsync(user))
+            {
+                // don't reveal that the user does not exist or email is not confirmed
+                return Unauthorized();
+            }
+
+            // generate token and 6-digit OTP code.
+            var resetPswdToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var otp = new Random().Next(100000, 999999).ToString();
+
+            // send email to user containing the OTP
+            await _emailService.SendEmailAsync(user.Email, "Reset Password", $"Your one-time password is:<b>{otp}</b>Enter your code in the app to reset your password.");
+
+            // store token, otp, and email in memory
+            _otpMemoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(30));
+
+            // return token to user
+            return Ok(new
+            {
+                resetPswdToken
+            });
+        }
+
+        [HttpPost("verify-otp")]
+        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
+        {
+            // check user and get values from memory to be validated against
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null) return Unauthorized("Email not found");
+            if (!_otpMemoryCache.TryGetValue(dto.Email, out string otp)) return Unauthorized("User not found in memory cache");
+
+            // check otp
+            if (dto.Otp != otp) return Unauthorized("Provided OTP incorrect");
+
+            // remove from memory
+            _otpMemoryCache.Remove(user.Email);
+
+            return Ok("OTP verified");
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null) return Unauthorized();
+
+            // validate token. if valid, update password
+            var result = await _userManager.ResetPasswordAsync(user, dto.ResetPswdToken, dto.NewPswd);
+            if (!result.Succeeded)
+            {
+                var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
+                return Unauthorized($"Password reset failed:\n{errorMessages}");
+            }
+
+            return Ok("Password successfully reset.");
+        }
+
+        // TOOD: probably put these in a "JwtService" file or something
         private string GenerateAccessToken(IdentityUser user, SigningCredentials credentials)
         {
             // claims to encode in access token payload
