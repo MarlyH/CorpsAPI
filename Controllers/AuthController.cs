@@ -1,4 +1,5 @@
 ﻿using Azure.Core;
+using CorpsAPI.Constants;
 using CorpsAPI.DTOs;
 using CorpsAPI.Models;
 using CorpsAPI.Services;
@@ -33,7 +34,7 @@ namespace CorpsAPI.Controllers
             _otpMemoryCache = otpMemoryCache;
         }
 
-        // TODO: all checks against email should be changed to id since email can be updated
+        // TODO: all checks against email should be changed to id since email can be updated. update endpoint doc wording too.
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
@@ -48,7 +49,9 @@ namespace CorpsAPI.Controllers
             };
             var result = await _userManager.CreateAsync(user, dto.Password);
 
-            if (!result.Succeeded) return BadRequest(result.Errors);
+            // return any errors
+            if (!result.Succeeded)
+                return BadRequest(new { message = result.Errors.Select(e => e.Description) });
 
             // generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
@@ -59,25 +62,25 @@ namespace CorpsAPI.Controllers
             await _emailService.SendEmailAsync(user.Email, "Verify your email", 
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
 
-            return Ok("Registration successful. Please check your email to confirm your account.");
+            return Ok(new { message = SuccessMessages.RegistrationSuccessful});
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            // check email
+
+            // check email exists, don't expose email with 404 Not Found code in case of failure
             if (user == null) return Unauthorized(new
             {
-                message = "Invalid login credentials.",
+                message = ErrorMessages.InvalidCredentials,
                 canResend = false
             });
 
-            // check if email is verified
-            // TODO: app looks for 401 response, checks for canSend value, and displays a link to the resend-verification endpoint
+            // check if email is verified. Yes this exposes the email but it's a worthy compromise.
             if (!user.EmailConfirmed) return Unauthorized(new
             {
-                message = "Email not confirmed. Please check your inbox/spam folders for the verification link.",
+                message = ErrorMessages.EmailNotConfirmed,
                 canResend = true
             });
 
@@ -85,7 +88,7 @@ namespace CorpsAPI.Controllers
             var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, false);
             if (!result.Succeeded) return Unauthorized(new
             {
-                message = "Invalid login credentials.",
+                message = ErrorMessages.InvalidCredentials,
                 canResend = false
             });
 
@@ -94,7 +97,8 @@ namespace CorpsAPI.Controllers
 
             // build out credentials for signing tokens
             string secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
-            if (secretKey.IsNullOrEmpty()) return Unauthorized("Secret key not found");
+            if (secretKey.IsNullOrEmpty()) 
+                return StatusCode(500, new { message = ErrorMessages.InternalServerError });
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
@@ -108,25 +112,28 @@ namespace CorpsAPI.Controllers
             });
         }
 
-        // TODO: implement expiry time
-        // TODO: make post? (exposing token with GET)
+        // TODO: implement expiry time?
         [HttpGet("confirm-email")]
         public async Task<IActionResult> ConfirmEmail(string userId, string token)
         {
             var user = await _userManager.FindByIdAsync(userId);
-            if (user == null) return NotFound("User not found.");
+            if (user == null) return NotFound(ErrorMessages.InvalidRequest);
 
             var result = await _userManager.ConfirmEmailAsync(user, token);
-            if (result.Succeeded) return Ok("Email successfully confirmed.");
-            else return BadRequest("Email confirmation failed.");
+            if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
+
+            return Ok(SuccessMessages.EmailConfirmed);
         }
 
         [HttpPost("resend-verification")]
         public async Task<IActionResult> ResendVerification([FromBody] ResendEmailDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null) return NotFound("Invalid email address");
-            if (user.EmailConfirmed) return BadRequest("Email is already confirmed");
+            if (user == null)
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
+            if (user.EmailConfirmed)
+                return BadRequest(new { message = ErrorMessages.EmailAlreadyConfirmed });
 
             // generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
@@ -138,7 +145,7 @@ namespace CorpsAPI.Controllers
             await _emailService.SendEmailAsync(user.Email, "Verify your email",
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
 
-            return Ok("Verificiation email resent. Please check your inbox/spam folders.");
+            return Ok(new { message =  SuccessMessages.EmailConfirmationResent });
         }
 
         // TODO: redo 401 return messages
@@ -146,11 +153,13 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> Refresh([FromBody] RefreshDto dto)
         {
             // check for refresh token
-            if (string.IsNullOrEmpty(dto.RefreshToken)) return BadRequest("Refresh token is required");
+            if (string.IsNullOrEmpty(dto.RefreshToken)) 
+                return BadRequest(new { message = ErrorMessages.InvalidRequest });
             
             // get signing key
             string secretKeyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
-            if (string.IsNullOrEmpty(secretKeyString)) return Unauthorized("Secret key not found");
+            if (string.IsNullOrEmpty(secretKeyString)) 
+                return StatusCode(500, new { message = ErrorMessages.InternalServerError });
             var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKeyString));
             
             try
@@ -181,23 +190,21 @@ namespace CorpsAPI.Controllers
 
                 // check token is in memory. 
                 if (!_refreshTokenStore.TryGetValue(jti, out string? userIdMemory))
-                {
-                    return Unauthorized("Refresh token not found in memory.");
-                }
+                    return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
                 // check user id in token matches what is in memory
                 if (userIdToken != userIdMemory)
-                {
-                    return Unauthorized("Token subject mismatch.");
-                }
+                    return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
                 // and finally remove old token from memory
                 _refreshTokenStore.Remove(jti);
 
                 // build out credentials for signing new token
                 var credentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
-                if (credentials == null) return Unauthorized("Credentials error.");
                  
                 var user = await _userManager.FindByIdAsync(userIdToken);
-                if (user == null) return Unauthorized("User not found.");
+                if (user == null) 
+                    return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
                 // generate new tokens. refresh token added to memory when generated.
                 var newAccessToken = GenerateAccessToken(user, credentials);
@@ -212,7 +219,7 @@ namespace CorpsAPI.Controllers
             }
             catch (Exception)
             {
-                return Unauthorized("Invalid token.");
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
             }
         }
 
@@ -220,11 +227,9 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null || !await _userManager.IsEmailConfirmedAsync(user))
-            {
+            if (user == null || !user.EmailConfirmed)
                 // don't reveal that the user does not exist or email is not confirmed
-                return Unauthorized();
-            }
+                return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
 
             // generate token and 6-digit OTP code.
             var resetPswdToken = await _userManager.GeneratePasswordResetTokenAsync(user);
@@ -236,9 +241,10 @@ namespace CorpsAPI.Controllers
             // store token, otp, and email in memory
             _otpMemoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(30));
 
-            // return token to user
+            // return token to client
             return Ok(new
             {
+                message = SuccessMessages.PasswordResetOtpSent,
                 resetPswdToken
             });
         }
@@ -248,33 +254,37 @@ namespace CorpsAPI.Controllers
         {
             // check user and get values from memory to be validated against
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null) return Unauthorized("Email not found");
-            if (!_otpMemoryCache.TryGetValue(dto.Email, out string otp)) return Unauthorized("User not found in memory cache");
+            if (user == null || !user.EmailConfirmed) 
+                return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
+            if (!_otpMemoryCache.TryGetValue(dto.Email, out string otp)) 
+                return Unauthorized(new { message = ErrorMessages.ExpiredOtp });
 
             // check otp
-            if (dto.Otp != otp) return Unauthorized("Provided OTP incorrect");
+            if (dto.Otp != otp) 
+                return BadRequest(new { message = ErrorMessages.IncorrectOtp });
 
             // remove from memory
             _otpMemoryCache.Remove(user.Email);
 
-            return Ok("OTP verified");
+            return Ok();
         }
 
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null) return Unauthorized();
+            if (user == null || !user.EmailConfirmed) 
+                return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
 
             // validate token. if valid, update password
-            var result = await _userManager.ResetPasswordAsync(user, dto.ResetPswdToken, dto.NewPswd);
+            var result = await _userManager.ResetPasswordAsync(user, dto.ResetPasswordToken, dto.NewPassword);
             if (!result.Succeeded)
             {
                 var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
-                return Unauthorized($"Password reset failed:\n{errorMessages}");
+                return BadRequest(new { message = $"Password reset failed:\n{errorMessages}" });
             }
 
-            return Ok("Password successfully reset.");
+            return Ok(new { message = SuccessMessages.PasswordSuccessfullyReset });
         }
 
         // TOOD: probably put these in a "JwtService" file or something

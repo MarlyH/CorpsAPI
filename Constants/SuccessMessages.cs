@@ -1,0 +1,11 @@
+﻿namespace CorpsAPI.Constants
+{
+    public static class SuccessMessages
+    {
+        public const string PasswordResetOtpSent = "A unique one-time password has been sent to your email address.";
+        public const string PasswordSuccessfullyReset = "Your password has been successfully reset.";
+        public const string RegistrationSuccessful = "Registration successful. Please check your email to activate your account.";
+        public const string EmailConfirmationResent = "Confirmation email resent. Please check your inbox/spam folders.";
+        public const string EmailConfirmed = "Email successfully confirmed.";
+    }
+}

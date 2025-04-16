@@ -3,7 +3,7 @@
     public class ResetPasswordDto
     {
         public string Email { get; set; }
-        public string ResetPswdToken { get; set; }
-        public string NewPswd { get; set; }
+        public string ResetPasswordToken { get; set; }
+        public string NewPassword { get; set; }
     }
 }
