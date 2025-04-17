@@ -38,8 +38,6 @@ namespace CorpsAPI.Controllers
             _memoryCache = memoryCache;
         }
 
-        // TODO: all checks against email should be changed to id since email can be updated. update endpoint doc wording too.
-
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
@@ -65,6 +63,9 @@ namespace CorpsAPI.Controllers
             // send email
             await _emailService.SendEmailAsync(user.Email, "Verify your email", 
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
+
+            // store in memory, give users a day to confirm
+            _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
             return Ok(new { message = SuccessMessages.RegistrationSuccessful});
         }
@@ -120,12 +121,15 @@ namespace CorpsAPI.Controllers
             });
         }
 
-        // TODO: implement expiry time?
         [HttpGet("confirm-email")]
         public async Task<IActionResult> ConfirmEmail(string userId, string token)
         {
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound(ErrorMessages.InvalidRequest);
+
+            // check confirm email token hasn't expired
+            var expiredResult = _memoryCache.TryGetValue($"confirm:{user.Email}", out _);
+            if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
 
             var result = await _userManager.ConfirmEmailAsync(user, token);
             if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
@@ -133,8 +137,8 @@ namespace CorpsAPI.Controllers
             return Ok(SuccessMessages.EmailConfirmed);
         }
 
-        [HttpPost("resend-verification")]
-        public async Task<IActionResult> ResendVerification([FromBody] ResendEmailDto dto)
+        [HttpPost("resend-confirmation")]
+        public async Task<IActionResult> ResendConfirmation([FromBody] ResendEmailDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
@@ -152,6 +156,9 @@ namespace CorpsAPI.Controllers
             // TODO: implement rate limiting, five mins per email per user.
             await _emailService.SendEmailAsync(user.Email, "Verify your email",
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
+
+            // store in memory, give users a day to confirm
+            _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
             return Ok(new { message =  SuccessMessages.EmailConfirmationResent });
         }
@@ -246,7 +253,7 @@ namespace CorpsAPI.Controllers
             // send email to user containing the OTP
             await _emailService.SendEmailAsync(user.Email, "Reset Password", $"Your one-time password is:<b>{otp}</b>Enter your code in the app to reset your password.");
 
-            // store email and OTP in memory
+            // store OTP in memory
             _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(30));
 
             // return token to client
@@ -345,5 +352,4 @@ namespace CorpsAPI.Controllers
             return new JwtSecurityTokenHandler().WriteToken(refreshToken);
         }
     }
-
 }
