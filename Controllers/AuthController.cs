@@ -16,6 +16,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization.Metadata;
 
 namespace CorpsAPI.Controllers
 {
@@ -27,15 +28,14 @@ namespace CorpsAPI.Controllers
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
         private readonly EmailService _emailService;
-        private readonly Dictionary<string, string> _refreshTokenStore = RefreshTokenStore.RefreshTokens;
-        private readonly IMemoryCache _otpMemoryCache;
+        private readonly IMemoryCache _memoryCache;
 
-        public AuthController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, EmailService emailService, IMemoryCache otpMemoryCache)
+        public AuthController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, EmailService emailService, IMemoryCache memoryCache)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _emailService = emailService;
-            _otpMemoryCache = otpMemoryCache;
+            _memoryCache = memoryCache;
         }
 
         // TODO: all checks against email should be changed to id since email can be updated. update endpoint doc wording too.
@@ -52,7 +52,7 @@ namespace CorpsAPI.Controllers
                 DateOfBirth = dto.DateOfBirth,
             };
             var result = await _userManager.CreateAsync(user, dto.Password);
-            await _userManager.AddToRoleAsync(user, "User");
+            await _userManager.AddToRoleAsync(user, Roles.User);
 
             if (!result.Succeeded)
                 return BadRequest(new { message = result.Errors.Select(e => e.Description) });
@@ -80,28 +80,30 @@ namespace CorpsAPI.Controllers
                 message = ErrorMessages.InvalidCredentials,
                 canResend = false
             });
-            IList<string> userRoles = await _userManager.GetRolesAsync(user);
 
-            // TODO: apparently having options.SignIn.RequireConfirmedAccount = true; means I don't need to manually check this
-            // check if email is verified. Yes this exposes the email but it's a worthy compromise.
-            if (!user.EmailConfirmed) return Unauthorized(new
-            {
-                message = ErrorMessages.EmailNotConfirmed,
-                canResend = true
-            });
-
-            // check password
+            // try sign in
             var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, false);
-            if (!result.Succeeded) return Unauthorized(new
+            if (!result.Succeeded)
             {
-                message = ErrorMessages.InvalidCredentials,
-                canResend = false
-            });
+                if (!user.EmailConfirmed)
+                    return Unauthorized(new
+                    {
+                        message = ErrorMessages.EmailNotConfirmed,
+                        canResend = true
+                    });
+
+                return Unauthorized(new
+                {
+                    message = ErrorMessages.InvalidCredentials,
+                    canResend = false
+                });
+            }
 
             // TODO: Test access token gets verified.
             // TODO: Test access token gets renewed.
 
             // build out credentials for signing tokens
+            IList<string> userRoles = await _userManager.GetRolesAsync(user);
             string secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
             if (secretKey.IsNullOrEmpty()) 
                 return StatusCode(500, new { message = ErrorMessages.InternalServerError });
@@ -193,8 +195,8 @@ namespace CorpsAPI.Controllers
                 // extract the sub claim (userId). Claim comes through as NameIdentifier so can't retrieve it normally like literally every other claim in the payload
                 var userIdToken = principalClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-                // check token is in memory. 
-                if (!_refreshTokenStore.TryGetValue(jti, out string? userIdMemory))
+                // check token is in memory.
+                if (!_memoryCache.TryGetValue(jti, out string? userIdMemory))
                     return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
                 // check user id in token matches what is in memory
@@ -202,7 +204,7 @@ namespace CorpsAPI.Controllers
                     return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
                 // and finally remove old token from memory
-                _refreshTokenStore.Remove(jti);
+                _memoryCache.Remove(jti);
 
                 // build out credentials for signing new token
                 var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -223,10 +225,9 @@ namespace CorpsAPI.Controllers
                     refreshToken = newRefreshToken
                 });
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                //return Unauthorized(new { message = ErrorMessages.InvalidRequest });
-                return Unauthorized(e.Message );
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
             }
         }
 
@@ -245,8 +246,8 @@ namespace CorpsAPI.Controllers
             // send email to user containing the OTP
             await _emailService.SendEmailAsync(user.Email, "Reset Password", $"Your one-time password is:<b>{otp}</b>Enter your code in the app to reset your password.");
 
-            // store token, otp, and email in memory
-            _otpMemoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(30));
+            // store email and OTP in memory
+            _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(30));
 
             // return token to client
             return Ok(new
@@ -263,7 +264,7 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null || !user.EmailConfirmed) 
                 return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
-            if (!_otpMemoryCache.TryGetValue(dto.Email, out string otp)) 
+            if (!_memoryCache.TryGetValue(dto.Email, out string otp)) 
                 return Unauthorized(new { message = ErrorMessages.ExpiredOtp });
 
             // check otp
@@ -271,7 +272,7 @@ namespace CorpsAPI.Controllers
                 return BadRequest(new { message = ErrorMessages.IncorrectOtp });
 
             // remove from memory
-            _otpMemoryCache.Remove(user.Email);
+            _memoryCache.Remove(user.Email);
 
             return Ok();
         }
@@ -294,7 +295,6 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = SuccessMessages.PasswordSuccessfullyReset });
         }
 
-        // TOOD: probably put these in a "JwtService" file or something
         private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)
         {
             // claims to encode in access token payload
@@ -339,7 +339,7 @@ namespace CorpsAPI.Controllers
                 );
 
             // store jti in memory
-            _refreshTokenStore.Add(jti, user.Id);
+            _memoryCache.Set(jti, user.Id, TimeSpan.FromDays(7));
 
             // serialize
             return new JwtSecurityTokenHandler().WriteToken(refreshToken);
