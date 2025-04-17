@@ -147,15 +147,21 @@ namespace CorpsAPI.Controllers
             if (user.EmailConfirmed)
                 return BadRequest(new { message = ErrorMessages.EmailAlreadyConfirmed });
 
+            // enforce rate-limiting
+            if (_memoryCache.TryGetValue($"resend:{user.Email}", out _))
+                return BadRequest(new { message = ErrorMessages.ResendEmailRateLimited });
+
             // generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
             var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // send email
-            // TODO: implement rate limiting, five mins per email per user.
             await _emailService.SendEmailAsync(user.Email, "Verify your email",
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
+
+            // store in memory, only one email every five minutes per user.
+            _memoryCache.Set($"resend:{user.Email}", true, TimeSpan.FromMinutes(5));
 
             // store in memory, give users a day to confirm
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
