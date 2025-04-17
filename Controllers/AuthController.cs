@@ -3,13 +3,17 @@ using CorpsAPI.Constants;
 using CorpsAPI.DTOs;
 using CorpsAPI.Models;
 using CorpsAPI.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Claims;
 using System.Text;
 
@@ -48,8 +52,8 @@ namespace CorpsAPI.Controllers
                 DateOfBirth = dto.DateOfBirth,
             };
             var result = await _userManager.CreateAsync(user, dto.Password);
+            await _userManager.AddToRoleAsync(user, "User");
 
-            // return any errors
             if (!result.Succeeded)
                 return BadRequest(new { message = result.Errors.Select(e => e.Description) });
 
@@ -76,7 +80,9 @@ namespace CorpsAPI.Controllers
                 message = ErrorMessages.InvalidCredentials,
                 canResend = false
             });
+            IList<string> userRoles = await _userManager.GetRolesAsync(user);
 
+            // TODO: apparently having options.SignIn.RequireConfirmedAccount = true; means I don't need to manually check this
             // check if email is verified. Yes this exposes the email but it's a worthy compromise.
             if (!user.EmailConfirmed) return Unauthorized(new
             {
@@ -102,7 +108,7 @@ namespace CorpsAPI.Controllers
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-            var accessTokenString = GenerateAccessToken(user, credentials);
+            var accessTokenString = GenerateAccessToken(user, credentials, userRoles);
             var refreshTokenString = GenerateRefreshToken(user, credentials);
             
             return Ok(new
@@ -148,7 +154,6 @@ namespace CorpsAPI.Controllers
             return Ok(new { message =  SuccessMessages.EmailConfirmationResent });
         }
 
-        // TODO: redo 401 return messages
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshDto dto)
         {
@@ -160,7 +165,7 @@ namespace CorpsAPI.Controllers
             string secretKeyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
             if (string.IsNullOrEmpty(secretKeyString)) 
                 return StatusCode(500, new { message = ErrorMessages.InternalServerError });
-            var secretKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKeyString));
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKeyString));
             
             try
             {
@@ -173,7 +178,7 @@ namespace CorpsAPI.Controllers
                     ValidAudience = "corps-app-refresh",
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = secretKey,
+                    IssuerSigningKey = securityKey,
                     ClockSkew = TimeSpan.Zero // no leeway on expiration time
                 };
 
@@ -200,14 +205,15 @@ namespace CorpsAPI.Controllers
                 _refreshTokenStore.Remove(jti);
 
                 // build out credentials for signing new token
-                var credentials = new SigningCredentials(secretKey, SecurityAlgorithms.HmacSha256);
+                var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
                  
                 var user = await _userManager.FindByIdAsync(userIdToken);
                 if (user == null) 
                     return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+                IList<string> userRoles = await _userManager.GetRolesAsync(user);
 
                 // generate new tokens. refresh token added to memory when generated.
-                var newAccessToken = GenerateAccessToken(user, credentials);
+                var newAccessToken = GenerateAccessToken(user, credentials, userRoles);
                 var newRefreshToken = GenerateRefreshToken(user, credentials);
 
                 // return new tokens
@@ -217,9 +223,10 @@ namespace CorpsAPI.Controllers
                     refreshToken = newRefreshToken
                 });
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+                //return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+                return Unauthorized(e.Message );
             }
         }
 
@@ -288,14 +295,14 @@ namespace CorpsAPI.Controllers
         }
 
         // TOOD: probably put these in a "JwtService" file or something
-        private string GenerateAccessToken(IdentityUser user, SigningCredentials credentials)
+        private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)
         {
             // claims to encode in access token payload
             var accessClaims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                //new Claim("role", "User"),
+                new Claim(ClaimTypes.Role, string.Join(",", roles))
             };
 
             // build out the access token and add fields into payload with the claims
@@ -319,7 +326,7 @@ namespace CorpsAPI.Controllers
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                 new Claim(JwtRegisteredClaimNames.Jti, jti),
-                new Claim(JwtRegisteredClaimNames.Iat, DateTime.Now.ToString())
+                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString())
             };
 
             // build out the refresh token and add fields into payload with the claims
