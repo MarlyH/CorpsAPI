@@ -308,6 +308,22 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = SuccessMessages.PasswordSuccessfullyReset });
         }
 
+        [HttpPost("change-password")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            var result = await _userManager.ChangePasswordAsync(user, dto.OldPassword, dto.NewPassword);
+
+            if (!result.Succeeded)
+            {
+                var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
+                return BadRequest(new { message = "Password change failed:\n" + errorMessages });
+            }
+                
+            return Ok(new { message = SuccessMessages.PasswordChangeSuccessful });
+        }
+
         private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)
         {
             // claims to encode in access token payload

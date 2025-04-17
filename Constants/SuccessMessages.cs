@@ -7,5 +7,6 @@
         public const string RegistrationSuccessful = "Registration successful. Please check your email to activate your account.";
         public const string EmailConfirmationResent = "Confirmation email resent. Please check your inbox/spam folders.";
         public const string EmailConfirmed = "Email successfully confirmed.";
+        public const string PasswordChangeSuccessful = "Password changed successfully.";
     }
 }
