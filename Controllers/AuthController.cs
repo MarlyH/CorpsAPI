@@ -223,8 +223,9 @@ namespace CorpsAPI.Controllers
                 var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
                  
                 var user = await _userManager.FindByIdAsync(userIdToken);
-                if (user == null) 
-                    return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+                if (user == null)
+                    return NotFound(new { message = ErrorMessages.InvalidRequest });
+
                 IList<string> userRoles = await _userManager.GetRolesAsync(user);
 
                 // generate new tokens. refresh token added to memory when generated.
@@ -313,6 +314,9 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
             var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
             var result = await _userManager.ChangePasswordAsync(user, dto.OldPassword, dto.NewPassword);
 
             if (!result.Succeeded)
@@ -322,6 +326,80 @@ namespace CorpsAPI.Controllers
             }
                 
             return Ok(new { message = SuccessMessages.PasswordChangeSuccessful });
+        }
+
+        [HttpGet("profile")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
+        public async Task<IActionResult> GetProfile()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
+            return Ok(new
+            {
+                userName = user.UserName,
+                firstName = user.FirstName,
+                lastName = user.LastName,
+                email = user.Email
+            });
+        }
+
+        [HttpPatch("profile")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
+            if (!string.IsNullOrEmpty(dto.NewEmail) && dto.NewEmail != user.Email)
+            {
+                var emailExists = await _userManager.FindByEmailAsync(dto.NewEmail);
+                if (emailExists != null) 
+                    return BadRequest(new { message = ErrorMessages.EmailTaken });
+
+                user.Email = dto.NewEmail;
+            }
+
+            if (!string.IsNullOrEmpty(dto.NewUserName) && dto.NewUserName != user.UserName)
+            {
+                var userNameExists = await _userManager.FindByNameAsync(dto.NewUserName);
+                if (userNameExists != null)
+                    return BadRequest(new { message = ErrorMessages.UserNameTaken });
+
+                user.UserName = dto.NewUserName;
+            }
+
+            // only update if provided
+            user.FirstName = dto.NewFirstName ?? user.FirstName;
+            user.LastName = dto.NewLastName ?? user.LastName;
+
+            var result = await _userManager.UpdateAsync(user);
+            
+            if (!result.Succeeded)
+            {
+                var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
+                return BadRequest(new { message = "Update failed:\n" + errorMessages });
+            }
+
+            return Ok(new { message = SuccessMessages.ProfileUpdateSuccessful });
+        }
+
+        [HttpDelete("profile")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
+        public async Task<IActionResult> DeleteProfile()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
+            var result = await _userManager.DeleteAsync(user);
+
+            if (!result.Succeeded)
+                return BadRequest(new { message = ErrorMessages.InvalidRequest });
+
+            return Ok(new { message = SuccessMessages.ProfileDeleteSuccessful });
         }
 
         private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)

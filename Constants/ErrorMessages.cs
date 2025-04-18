@@ -16,5 +16,7 @@
         public const string ExpiredOtp = "Code has expired.";
         public const string IncorrectOtp = "The code you entered is incorrect. Please try again.";
         public const string EmailAlreadyConfirmed = "Email is already confirmed";
+        public const string EmailTaken = "This email address is already taken.";
+        public const string UserNameTaken = "This user name is already taken.";
     }
 }

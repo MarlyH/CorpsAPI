@@ -8,5 +8,7 @@
         public const string EmailConfirmationResent = "Confirmation email resent. Please check your inbox/spam folders.";
         public const string EmailConfirmed = "Email successfully confirmed.";
         public const string PasswordChangeSuccessful = "Password changed successfully.";
+        public const string ProfileUpdateSuccessful = "Profile updated successfully.";
+        public const string ProfileDeleteSuccessful = "Profile deleted successfully.\nWe're sorry to see you go :(";
     }
 }
