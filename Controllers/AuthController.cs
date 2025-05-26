@@ -29,15 +29,22 @@ namespace CorpsAPI.Controllers
         private readonly SignInManager<AppUser> _signInManager;
         private readonly EmailService _emailService;
         private readonly IMemoryCache _memoryCache;
+        private readonly IConfiguration _configuration;
 
-        public AuthController(UserManager<AppUser> userManager, SignInManager<AppUser> signInManager, EmailService emailService, IMemoryCache memoryCache)
+        public AuthController(
+            UserManager<AppUser> userManager, 
+            SignInManager<AppUser> signInManager, 
+            EmailService emailService, 
+            IMemoryCache memoryCache,
+            IConfiguration configuration)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _emailService = emailService;
             _memoryCache = memoryCache;
+            _configuration = configuration;
         }
-
+        
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
@@ -105,7 +112,7 @@ namespace CorpsAPI.Controllers
 
             // build out credentials for signing tokens
             IList<string> userRoles = await _userManager.GetRolesAsync(user);
-            string secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
+            string secretKey = _configuration["JwtSecretKey"];
             if (secretKey.IsNullOrEmpty()) 
                 return StatusCode(500, new { message = ErrorMessages.InternalServerError });
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
@@ -175,9 +182,9 @@ namespace CorpsAPI.Controllers
             // check for refresh token
             if (string.IsNullOrEmpty(dto.RefreshToken)) 
                 return BadRequest(new { message = ErrorMessages.InvalidRequest });
-            
+
             // get signing key
-            string secretKeyString = Environment.GetEnvironmentVariable("JWT_SECRET_KEY");
+            string secretKeyString = _configuration["JwtSecretKey"];
             if (string.IsNullOrEmpty(secretKeyString)) 
                 return StatusCode(500, new { message = ErrorMessages.InternalServerError });
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKeyString));

@@ -44,7 +44,7 @@ namespace CorpsAPI
                         ValidAudience = "corps-app-access",
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("JWT_SECRET_KEY"))),
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSecretKey"])),
                         RoleClaimType = ClaimTypes.Role
                     };
                 });
