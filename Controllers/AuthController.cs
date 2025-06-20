@@ -24,7 +24,8 @@ namespace CorpsAPI.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private const string serverUrl = "https://localhost:7125";
+        // private const string serverUrl = "https://localhost:7125";
+        private const string serverUrl = "http://localhost:5133";
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
         private readonly EmailService _emailService;
@@ -56,26 +57,31 @@ namespace CorpsAPI.Controllers
                 LastName = dto.LastName,
                 DateOfBirth = dto.DateOfBirth,
             };
-            var result = await _userManager.CreateAsync(user, dto.Password);
-            await _userManager.AddToRoleAsync(user, Roles.User);
 
+            var result = await _userManager.CreateAsync(user, dto.Password);
+
+            // Check if the user was created before assigning the role
             if (!result.Succeeded)
                 return BadRequest(new { message = result.Errors.Select(e => e.Description) });
 
-            // generate email verification token
+            // Now it's safe to assign a role
+            await _userManager.AddToRoleAsync(user, Roles.User);
+
+            // Generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
             var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
-            // send email
+            // Send email
             await _emailService.SendEmailAsync(user.Email, "Verify your email", 
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
 
-            // store in memory, give users a day to confirm
+            // Store in memory
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
-            return Ok(new { message = SuccessMessages.RegistrationSuccessful});
+            return Ok(new { message = SuccessMessages.RegistrationSuccessful });
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
