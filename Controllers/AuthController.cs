@@ -79,7 +79,7 @@ namespace CorpsAPI.Controllers
             // Store in memory
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
-            return Ok(new { message = SuccessMessages.RegistrationSuccessful });
+            return Ok(new { message = SuccessMessages.RegistrationSuccessful }); //(constant) string SuccessMessages.RegistrationSuccessful = "Registration successful. Please check your email to activate your account.
         }
 
 
@@ -140,14 +140,55 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound(ErrorMessages.InvalidRequest);
 
-            // check confirm email token hasn't expired
             var expiredResult = _memoryCache.TryGetValue($"confirm:{user.Email}", out _);
             if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
 
             var result = await _userManager.ConfirmEmailAsync(user, token);
             if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
 
-            return Ok(SuccessMessages.EmailConfirmed);
+            // return custom CSS & HTML email verification message
+            var html = @"
+                <!DOCTYPE html>
+                <html lang='en'>
+                <head>
+                    <meta charset='UTF-8'>
+                    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                    <title>CorpsApp | Email Confirmed</title>
+                    <style>
+                        body {
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                            background-color:rgb(0, 0, 0);
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            height: 100vh;
+                            margin: 0;
+                        }
+                        .card {
+                            background-color: rgb(28, 28, 28);
+                            padding: 40px;
+                            border-radius: 10px;
+                            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+                            text-align: center;
+                        }
+                        .card h1 {
+                            color:rgb(255, 255, 255);
+                            margin-bottom: 20px;
+                        }
+                        .card p {
+                            color: rgb(207, 207, 207);
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class='card'>
+                        <h1>Email Verified</h1>
+                        <p>Thank you! Your email has been successfully confirmed.</p>
+                    </div>
+                </body>
+                </html>";
+
+            return Content(html, "text/html");
         }
 
         [HttpPost("resend-confirmation")]
