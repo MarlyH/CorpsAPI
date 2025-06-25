@@ -177,6 +177,7 @@ namespace CorpsAPI.Controllers
                         }
                         .card p {
                             color: rgb(207, 207, 207);
+                            margin-bottom:10px;
                         }
                     </style>
                 </head>
@@ -184,6 +185,7 @@ namespace CorpsAPI.Controllers
                     <div class='card'>
                         <h1>Email Verified</h1>
                         <p>Thank you! Your email has been successfully confirmed.</p>
+                        <p>Return to the Your Corps App to login.</p>
                     </div>
                 </body>
                 </html>";
