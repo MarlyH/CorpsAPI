@@ -58,6 +58,11 @@ namespace CorpsAPI.Controllers
                 DateOfBirth = dto.DateOfBirth,
             };
 
+            // Check for duplicate email
+            var existingUser = await _userManager.FindByEmailAsync(dto.Email);
+            if (existingUser != null)
+                return BadRequest(new { message = ErrorMessages.EmailTaken });
+
             var result = await _userManager.CreateAsync(user, dto.Password);
 
             // Check if the user was created before assigning the role
