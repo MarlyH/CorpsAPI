@@ -319,10 +319,43 @@ namespace CorpsAPI.Controllers
             var otp = new Random().Next(100000, 999999).ToString();
 
             // send email to user containing the OTP
-            await _emailService.SendEmailAsync(user.Email, "Reset Password", $"Your one-time password is:<b>{otp}</b>Enter your code in the app to reset your password.");
+            await _emailService.SendEmailAsync(
+                user.Email,
+                "Reset Password",
+                $@"
+                <div style='
+                    background-color: #f9f9f9;
+                    padding: 40px 20px;
+                    font-family: Helvetica, Arial, sans-serif;
+                    text-align: center;
+                    color: #333;
+                '>
+                    <h2 style='margin-bottom: 24px;'>Reset Your Password</h2>
 
+                    <p style='font-size: 16px; margin-bottom: 30px;'>
+                        Use the one-time password (OTP) below to reset your account password. This code is valid for 10 minutes.
+                    </p>
+
+                    <div style='
+                        display: inline-block;
+                        font-size: 32px;
+                        font-weight: bold;
+                        letter-spacing: 6px;
+                        color: #ffffff;
+                        background-color: #007BFF;
+                        padding: 16px 32px;
+                        border-radius: 12px;
+                        margin-bottom: 30px;
+                    '>{otp}</div>
+
+                    <p style='font-size: 14px; color: #777; margin-top: 32px;'>
+                        If you didn't request a password reset, please ignore this message.<br>
+                        For security, do not share this code with anyone.
+                    </p>
+                </div>"
+            );
             // store OTP in memory
-            _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(30));
+            _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(10));
 
             // return token to client
             return Ok(new
