@@ -1,4 +1,5 @@
-﻿using CorpsAPI.Models;
+﻿using System.Reflection.Emit;
+using CorpsAPI.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -20,8 +21,15 @@ namespace CorpsAPI.Data
             base.OnModelCreating(builder);
 
             builder.Entity<AppUser>()
-                   .HasIndex(u => u.Email)
-                   .IsUnique();
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            builder.Entity<Booking>()
+                .HasOne(b => b.AttendingUser)
+                .WithMany()
+                .HasForeignKey(b => b.AttendingUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
+
     }
 }
