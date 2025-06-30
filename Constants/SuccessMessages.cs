@@ -10,5 +10,7 @@
         public const string PasswordChangeSuccessful = "Password changed successfully.";
         public const string ProfileUpdateSuccessful = "Profile updated successfully.";
         public const string ProfileDeleteSuccessful = "Profile deleted successfully.\nWe're sorry to see you go :(";
+        public const string ChangeEmailRequest = "Verification sent to new email.";
+        public const string ChangeEmailSuccess = "Email successfully changed.";
     }
 }
