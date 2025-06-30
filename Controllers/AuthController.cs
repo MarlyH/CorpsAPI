@@ -240,6 +240,11 @@ namespace CorpsAPI.Controllers
             if (user == null) 
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
+            // Ensure requested address isn't taken
+            var existingUser = await _userManager.FindByEmailAsync(dto.NewEmail);
+            if (existingUser != null)
+                return BadRequest(new { message = ErrorMessages.EmailTaken });
+
             var token = await _userManager.GenerateChangeEmailTokenAsync(user, dto.NewEmail);
             var encodedToken = WebUtility.UrlEncode(token);
 
