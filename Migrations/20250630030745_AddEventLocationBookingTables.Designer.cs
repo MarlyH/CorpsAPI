@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CorpsAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250630021622_SetBookingUserIdNullOnUserDelete")]
-    partial class SetBookingUserIdNullOnUserDelete
+    [Migration("20250630030745_AddEventLocationBookingTables")]
+    partial class AddEventLocationBookingTables
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -113,9 +113,6 @@ namespace CorpsAPI.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("BookingId"));
 
-                    b.Property<string>("AppUserId")
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<string>("AttendingUserId")
                         .HasColumnType("nvarchar(450)");
 
@@ -136,8 +133,6 @@ namespace CorpsAPI.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("BookingId");
-
-                    b.HasIndex("AppUserId");
 
                     b.HasIndex("AttendingUserId");
 
@@ -351,12 +346,8 @@ namespace CorpsAPI.Migrations
 
             modelBuilder.Entity("CorpsAPI.Models.Booking", b =>
                 {
-                    b.HasOne("CorpsAPI.Models.AppUser", null)
-                        .WithMany("Bookings")
-                        .HasForeignKey("AppUserId");
-
                     b.HasOne("CorpsAPI.Models.AppUser", "AttendingUser")
-                        .WithMany()
+                        .WithMany("Bookings")
                         .HasForeignKey("AttendingUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 

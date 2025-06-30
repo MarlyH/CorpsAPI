@@ -72,7 +72,8 @@ namespace CorpsAPI.Migrations
                         name: "FK_Bookings_AspNetUsers_AttendingUserId",
                         column: x => x.AttendingUserId,
                         principalTable: "AspNetUsers",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_Bookings_Events_EventId",
                         column: x => x.EventId,

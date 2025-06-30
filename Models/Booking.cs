@@ -6,7 +6,7 @@ namespace CorpsAPI.Models
     public class Booking
     {
         [Key]
-        public int BookingId { get; set; }        
+        public int BookingId { get; set; }
         public int EventId { get; set; }
         [ForeignKey("EventId")]
         public Event? Event { get; set; }

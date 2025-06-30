@@ -26,10 +26,9 @@ namespace CorpsAPI.Data
 
             builder.Entity<Booking>()
                 .HasOne(b => b.AttendingUser)
-                .WithMany()
+                .WithMany(u => u.Bookings)
                 .HasForeignKey(b => b.AttendingUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         }
-
     }
 }
