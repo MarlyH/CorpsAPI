@@ -230,6 +230,37 @@ namespace CorpsAPI.Controllers
             return Ok(new { message =  SuccessMessages.EmailConfirmationResent });
         }
 
+        [Authorize]
+        [HttpPost("request-email-change")]
+        public async Task<IActionResult> RequestEmailChange([FromBody] ChangeEmailRequestDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) 
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var token = await _userManager.GenerateChangeEmailTokenAsync(user, dto.NewEmail);
+            var encodedToken = WebUtility.UrlEncode(token);
+
+            var url = $"{serverUrl}/api/auth/confirm-email-change?userId={user.Id}&newEmail={dto.NewEmail}&token={encodedToken}";
+            await _emailService.SendEmailAsync(dto.NewEmail, "Confirm Email Change", $"<a href='{url}'>Click here to confirm</a>");
+
+            return Ok(new { message = SuccessMessages.ChangeEmailRequest });
+        }
+
+        [HttpGet("confirm-email-change")]
+        public async Task<IActionResult> ConfirmEmailChange(string userId, string newEmail, string token)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) 
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
+            var result = await _userManager.ChangeEmailAsync(user, newEmail, token);
+            if (!result.Succeeded) 
+                return BadRequest(new { message = result.Errors } );
+
+            return Ok(new { message = SuccessMessages.ChangeEmailSuccess });
+        }
+
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] RefreshDto dto)
         {
@@ -447,14 +478,14 @@ namespace CorpsAPI.Controllers
             if (user == null)
                 return NotFound(new { message = ErrorMessages.InvalidRequest });
 
-            if (!string.IsNullOrEmpty(dto.NewEmail) && dto.NewEmail != user.Email)
+            /*if (!string.IsNullOrEmpty(dto.NewEmail) && dto.NewEmail != user.Email)
             {
                 var emailExists = await _userManager.FindByEmailAsync(dto.NewEmail);
                 if (emailExists != null) 
                     return BadRequest(new { message = ErrorMessages.EmailTaken });
 
                 user.Email = dto.NewEmail;
-            }
+            }*/
 
             if (!string.IsNullOrEmpty(dto.NewUserName) && dto.NewUserName != user.UserName)
             {
