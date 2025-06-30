@@ -1,6 +1,6 @@
-﻿namespace CorpsAPI.DTOs
+﻿namespace CorpsAPI.DTOs.Profile
 {
-    public class UpdateProfileDto
+    public class UpdateProfileRequestDto
     {
         public string? NewUserName { get; set; }
         public string? NewFirstName { get; set; }

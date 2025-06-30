@@ -1,4 +1,4 @@
-﻿namespace CorpsAPI.DTOs
+﻿namespace CorpsAPI.DTOs.Profile
 {
     public class ChangeEmailRequestDto
     {

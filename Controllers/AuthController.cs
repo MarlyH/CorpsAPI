@@ -1,6 +1,8 @@
 ﻿using Azure.Core;
 using CorpsAPI.Constants;
-using CorpsAPI.DTOs;
+using CorpsAPI.DTOs.Auth;
+using CorpsAPI.DTOs.PasswordRecovery;
+using CorpsAPI.DTOs.Profile;
 using CorpsAPI.Models;
 using CorpsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -436,7 +438,7 @@ namespace CorpsAPI.Controllers
 
         [HttpPost("change-password")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto dto)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
@@ -461,18 +463,20 @@ namespace CorpsAPI.Controllers
             if (user == null)
                 return NotFound(new { message = ErrorMessages.InvalidRequest });
 
-            return Ok(new
+            var dto = new UserProfileDto
             {
-                userName = user.UserName,
-                firstName = user.FirstName,
-                lastName = user.LastName,
-                email = user.Email
-            });
+                UserName = user.UserName,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Email = user.Email
+            };
+
+            return Ok(dto);
         }
 
         [HttpPatch("profile")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
-        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequestDto dto)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
