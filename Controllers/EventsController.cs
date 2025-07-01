@@ -39,11 +39,22 @@ namespace CorpsAPI.Controllers
         }
 
         // GET: api/Events/5
-        /*[HttpGet("{id}")]
+        [HttpGet("{id}")]
         public async Task<IActionResult> GetEvent(int id)
         {
-            
-        }*/
+            var ev = await _context.Events
+                .Include(e => e.Location)
+                .Include(e => e.Bookings)
+                .FirstOrDefaultAsync(e => e.EventId == id);
+
+            if (ev == null)
+                return NotFound(new { message = "Event not found." });
+
+            var dto = new GetEventDto(ev);
+
+            return Ok(dto);
+        }
+
 
         // POST: api/Events
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
