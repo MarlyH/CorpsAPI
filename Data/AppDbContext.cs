@@ -15,6 +15,7 @@ namespace CorpsAPI.Data
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<Event> Events { get; set; }
         public DbSet<Location> Locations { get; set; }
+        public DbSet<Child> Children { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
