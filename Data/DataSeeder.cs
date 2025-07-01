@@ -25,6 +25,7 @@ namespace CorpsAPI.Data
 
             var email = "admin@admin.com";
             var password = "Admin123!";
+            var dateOfBirth = new DateOnly(1990, 1, 1);
 
             var adminExists = await userManager.FindByEmailAsync(email);
             if (adminExists == null)
@@ -35,7 +36,8 @@ namespace CorpsAPI.Data
                     UserName = "CorpsAdmin",
                     EmailConfirmed = true,
                     FirstName = "James",
-                    LastName = "Ward"
+                    LastName = "Ward",
+                    DateOfBirth = dateOfBirth
                 };
 
                 var result = await userManager.CreateAsync(adminUser, password);

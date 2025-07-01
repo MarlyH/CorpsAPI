@@ -27,7 +27,7 @@ namespace CorpsAPI.Controllers
     public class AuthController : ControllerBase
     {
         // private const string serverUrl = "https://localhost:7125";
-        private const string serverUrl = "http://localhost:5133";
+        private const string serverUrl = "http://0.0.0.0:5133";
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
         private readonly EmailService _emailService;
@@ -473,7 +473,8 @@ namespace CorpsAPI.Controllers
                 UserName = user.UserName,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
-                Email = user.Email
+                Email = user.Email,
+                Age= user.Age
             };
 
             return Ok(dto);
