@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.Identity;
 
 namespace CorpsAPI.Models
 {
@@ -10,7 +11,22 @@ namespace CorpsAPI.Models
         public List<Booking> Bookings { get; set; } = new();
         public List<Event> ManagedEvents { get; set; } = new();
         public List<Child> Child { get; set; } = new();
+        [NotMapped]
+        public int Age 
+        { 
+            get
+            {
+                var today = DateOnly.FromDateTime(DateTime.Today);
+                var age = today.Year - DateOfBirth.Year;
 
+                if (today.Month < DateOfBirth.Month ||
+                    (today.Month == DateOfBirth.Month && today.Day < DateOfBirth.Day))
+                {
+                    age--;
+                }
 
+                return age;
+            } 
+        }
     }
 }
