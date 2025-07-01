@@ -11,12 +11,17 @@ namespace CorpsAPI.Models
         public int LocationId { get; set; }
         [ForeignKey("LocationId")]
         public Location? Location { get; set; }
+        public string EventManagerId { get; set; } = default!;
+        [ForeignKey("EventManagerId")]
+        public AppUser? EventManager { get; set; }
         [Required]
-        public SessionType SessionType { get; set; }
+        public EventSessionType SessionType { get; set; }
         [Required]
         public DateOnly StartDate { get; set; }
         [Required]
         public TimeOnly StartTime { get; set; }
+        [Required]
+        public TimeOnly EndTime { get; set; }
         [Required]
         public DateOnly AvailableDate { get; set; }
         public string SeatingMapImgSrc { get; set; } = default!;
@@ -32,7 +37,7 @@ namespace CorpsAPI.Models
         public int AttendanceCount { get { return Bookings?.Count(b => b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut) ?? 0; } }
     }
 
-    public enum SessionType
+    public enum EventSessionType
     {
         Kids,
         Teens,

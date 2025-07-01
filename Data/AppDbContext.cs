@@ -24,11 +24,33 @@ namespace CorpsAPI.Data
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
+            // set attending user to null if user deleted (retain their bookings for reporting)
             builder.Entity<Booking>()
                 .HasOne(b => b.AttendingUser)
                 .WithMany(u => u.Bookings)
                 .HasForeignKey(b => b.AttendingUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // don't touch location when event deleted
+            builder.Entity<Event>()
+                .HasOne(e => e.Location)
+                .WithMany()
+                .HasForeignKey(e => e.LocationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // don't touch event manager when event deleted
+            builder.Entity<Event>()
+                .HasOne(e => e.EventManager)
+                .WithMany(u => u.ManagedEvents)
+                .HasForeignKey(e => e.EventManagerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // delete associated bookings when event deleted
+            builder.Entity<Event>()
+                .HasMany(e => e.Bookings)
+                .WithOne(b => b.Event)
+                .HasForeignKey(b => b.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

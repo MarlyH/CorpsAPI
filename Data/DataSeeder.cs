@@ -44,5 +44,26 @@ namespace CorpsAPI.Data
                     await userManager.AddToRoleAsync(adminUser, Roles.Admin);
             }
         }
+
+        public static async Task SeedLocations(IServiceProvider serviceProvider)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            if (!context.Locations.Any())
+            {
+                var locations = new List<Location>
+                {
+                    new Location { Name = "Invercargill", MascotImgSrc = null },
+                    new Location { Name = "Bluff", MascotImgSrc = null },
+                    new Location { Name = "Te Anau", MascotImgSrc = null },
+                    new Location { Name = "Gore", MascotImgSrc = null },
+                    new Location { Name = "Riverton", MascotImgSrc = null },
+                };
+
+                context.Locations.AddRange(locations);
+                await context.SaveChangesAsync();
+            }
+        }
     }
 }

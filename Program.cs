@@ -104,6 +104,7 @@ namespace CorpsAPI
                 var services = scope.ServiceProvider;
                 await DataSeeder.SeedRolesAsync(services);
                 await DataSeeder.SeedAdminUser(services);
+                await DataSeeder.SeedLocations(services);
             }
 
             // Configure the HTTP request pipeline.
