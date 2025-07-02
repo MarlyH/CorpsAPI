@@ -30,6 +30,7 @@ namespace CorpsAPI.Controllers
         private const string serverUrl = "http://localhost:5133";
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly EmailService _emailService;
         private readonly IMemoryCache _memoryCache;
         private readonly IConfiguration _configuration;
@@ -37,12 +38,14 @@ namespace CorpsAPI.Controllers
         public AuthController(
             UserManager<AppUser> userManager, 
             SignInManager<AppUser> signInManager, 
+            RoleManager<IdentityRole> roleManager,
             EmailService emailService, 
             IMemoryCache memoryCache,
             IConfiguration configuration)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _roleManager = roleManager;
             _emailService = emailService;
             _memoryCache = memoryCache;
             _configuration = configuration;
@@ -541,6 +544,39 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = SuccessMessages.ProfileDeleteSuccessful });
         }
+
+        [HttpPost("change-role")]
+        [Authorize(Roles = Roles.Admin)]
+        public async Task<IActionResult> ChangeUserRole([FromBody] ChangeUserRole dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+                return NotFound("User not found");
+
+            // ensure role actually exists
+            var roleExists = await _roleManager.RoleExistsAsync(dto.Role);
+            if (!roleExists)
+                return BadRequest(new { message = ErrorMessages.RoleNotExist });
+
+            // get old roles
+            var currentRoles = await _userManager.GetRolesAsync(user);
+
+            // add user to new role
+            var resultAdd = await _userManager.AddToRoleAsync(user, dto.Role);
+            if (!resultAdd.Succeeded)
+                return BadRequest(new { message =  ErrorMessages.AddToRoleFailed });
+
+            // remove from old roles
+            if (currentRoles.Any())
+            {
+                var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                if (!removeResult.Succeeded)
+                    return BadRequest(new { message = ErrorMessages.RemoveFromExistingRoles });
+            }
+
+            return Ok(new { message = SuccessMessages.ChangeRoleSuccess });
+        }
+
 
         private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)
         {

@@ -18,5 +18,10 @@
         public const string EmailAlreadyConfirmed = "Email is already confirmed";
         public const string EmailTaken = "This email address is already taken.";
         public const string UserNameTaken = "This user name is already taken.";
+
+        // promote role errors
+        public const string RoleNotExist = "Role does not exist.";
+        public const string AddToRoleFailed = "Failed to add to new role.";
+        public const string RemoveFromExistingRoles = "Failed to remove from existing roles.";
     }
 }
