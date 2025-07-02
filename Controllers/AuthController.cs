@@ -33,6 +33,7 @@ namespace CorpsAPI.Controllers
         private readonly SignInManager<AppUser> _signInManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly EmailService _emailService;
+        private readonly TokenService _tokenService;
         private readonly IMemoryCache _memoryCache;
         private readonly IConfiguration _configuration;
 
@@ -40,7 +41,8 @@ namespace CorpsAPI.Controllers
             UserManager<AppUser> userManager, 
             SignInManager<AppUser> signInManager, 
             RoleManager<IdentityRole> roleManager,
-            EmailService emailService, 
+            EmailService emailService,
+            TokenService tokenService,
             IMemoryCache memoryCache,
             IConfiguration configuration)
         {
@@ -48,6 +50,7 @@ namespace CorpsAPI.Controllers
             _signInManager = signInManager;
             _roleManager = roleManager;
             _emailService = emailService;
+            _tokenService = tokenService;
             _memoryCache = memoryCache;
             _configuration = configuration;
         }
@@ -140,8 +143,8 @@ namespace CorpsAPI.Controllers
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-            var accessTokenString = GenerateAccessToken(user, credentials, userRoles);
-            var refreshTokenString = GenerateRefreshToken(user, credentials);
+            var accessTokenString = _tokenService.GenerateAccessToken(user, credentials, userRoles);
+            var refreshTokenString = _tokenService.GenerateRefreshToken(user, credentials);
             
             return Ok(new
             {
@@ -337,8 +340,8 @@ namespace CorpsAPI.Controllers
                 IList<string> userRoles = await _userManager.GetRolesAsync(user);
 
                 // generate new tokens. refresh token added to memory when generated.
-                var newAccessToken = GenerateAccessToken(user, credentials, userRoles);
-                var newRefreshToken = GenerateRefreshToken(user, credentials);
+                var newAccessToken = _tokenService.GenerateAccessToken(user, credentials, userRoles);
+                var newRefreshToken = _tokenService.GenerateRefreshToken(user, credentials);
 
                 // return new tokens
                 return Ok(new
@@ -591,56 +594,6 @@ namespace CorpsAPI.Controllers
                 return BadRequest(new { message = ErrorMessages.RemoveFromExistingRoles });
 
             return Ok(new { message = SuccessMessages.ChangeRoleSuccess });
-        }
-
-        private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)
-        {
-            // claims to encode in access token payload
-            var accessClaims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(ClaimTypes.Role, string.Join(",", roles))
-            };
-
-            // build out the access token and add fields into payload with the claims
-            var accessToken = new JwtSecurityToken(
-                issuer: "corps-api-access",
-                audience: "corps-app-access",
-                claims: accessClaims,
-                expires: DateTime.Now.AddMinutes(15),
-                signingCredentials: credentials
-                );
-
-            // serialize
-            return new JwtSecurityTokenHandler().WriteToken(accessToken);
-        }
-
-        private string GenerateRefreshToken(IdentityUser user, SigningCredentials credentials)
-        {
-            // claims to encode in refresh token payload
-            var jti = Guid.NewGuid().ToString();
-            var refreshClaims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                new Claim(JwtRegisteredClaimNames.Jti, jti),
-                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString())
-            };
-
-            // build out the refresh token and add fields into payload with the claims
-            var refreshToken = new JwtSecurityToken(
-                issuer: "corps-api-refresh",
-                audience: "corps-app-refresh",
-                claims: refreshClaims,
-                expires: DateTime.Now.AddDays(7),
-                signingCredentials: credentials
-                );
-
-            // store jti in memory
-            _memoryCache.Set(jti, user.Id, TimeSpan.FromDays(7));
-
-            // serialize
-            return new JwtSecurityTokenHandler().WriteToken(refreshToken);
         }
     }
 }

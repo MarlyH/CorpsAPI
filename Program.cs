@@ -58,6 +58,9 @@ namespace CorpsAPI
             builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
             builder.Services.AddTransient<EmailService>();
 
+            // register JWT service
+            builder.Services.AddScoped<TokenService>();
+
             // register memory cache for pswd reset OTPs
             builder.Services.AddMemoryCache();
 
