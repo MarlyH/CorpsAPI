@@ -46,6 +46,19 @@ namespace CorpsAPI.Controllers
             if (eventEntity.AvailableSeats <= 0)
                 return BadRequest(new { message = "No seats available." });
 
+            /*switch (eventEntity.SessionType)
+            {
+                case EventSessionType.Kids:
+                    if (user.Age < 5 && user.Age > 12)
+                    {
+                        //create booking
+                    }
+                    else
+                    {
+                        // no booking
+                    }
+            }*/
+
             var booking = new Booking
             {
                 EventId = dto.EventId,

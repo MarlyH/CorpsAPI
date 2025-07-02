@@ -1,4 +1,12 @@
-﻿using Azure.Core;
+﻿using System.Data;
+using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json.Serialization.Metadata;
+using Azure.Core;
 using CorpsAPI.Constants;
 using CorpsAPI.DTOs.Auth;
 using CorpsAPI.DTOs.PasswordRecovery;
@@ -12,13 +20,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
-using System.Data;
-using System.IdentityModel.Tokens.Jwt;
-using System.Net;
-using System.Net.Sockets;
-using System.Security.Claims;
-using System.Text;
-using System.Text.Json.Serialization.Metadata;
 
 namespace CorpsAPI.Controllers
 {
@@ -546,37 +547,51 @@ namespace CorpsAPI.Controllers
         }
 
         [HttpPost("change-role")]
-        [Authorize(Roles = Roles.Admin)]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
         public async Task<IActionResult> ChangeUserRole([FromBody] ChangeUserRole dto)
         {
+            // normalise (user => User)
+            dto.Role = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(dto.Role.ToLower());
+
+            // event managers can only change the roles of users/staff
+            if (User.IsInRole(Roles.EventManager)
+                && dto.Role != Roles.Staff
+                && dto.Role != Roles.User)
+            {
+                return BadRequest(new { message = ErrorMessages.EventManagerRestrictions });
+            }
+
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
                 return NotFound("User not found");
 
             // ensure role actually exists
-            var roleExists = await _roleManager.RoleExistsAsync(dto.Role);
-            if (!roleExists)
+            if (!await _roleManager.RoleExistsAsync(dto.Role))
                 return BadRequest(new { message = ErrorMessages.RoleNotExist });
 
             // get old roles
             var currentRoles = await _userManager.GetRolesAsync(user);
 
+            // don't let admins be demoted
+            if (currentRoles.Contains(Roles.Admin))
+                return BadRequest(new { message = ErrorMessages.CannotDemoteAdmin });
+
+            // no change if the user already has only the target role
+            if (currentRoles.Count == 1 && currentRoles.Contains(dto.Role))
+                return BadRequest(new { message = ErrorMessages.UserAlreadyInRole });
+
             // add user to new role
             var resultAdd = await _userManager.AddToRoleAsync(user, dto.Role);
             if (!resultAdd.Succeeded)
-                return BadRequest(new { message =  ErrorMessages.AddToRoleFailed });
+                return BadRequest(new { message = ErrorMessages.AddToRoleFailed });
 
             // remove from old roles
-            if (currentRoles.Any())
-            {
-                var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
-                if (!removeResult.Succeeded)
-                    return BadRequest(new { message = ErrorMessages.RemoveFromExistingRoles });
-            }
+            var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+            if (!removeResult.Succeeded)
+                return BadRequest(new { message = ErrorMessages.RemoveFromExistingRoles });
 
             return Ok(new { message = SuccessMessages.ChangeRoleSuccess });
         }
-
 
         private string GenerateAccessToken(AppUser user, SigningCredentials credentials, IList<string> roles)
         {

@@ -23,5 +23,8 @@
         public const string RoleNotExist = "Role does not exist.";
         public const string AddToRoleFailed = "Failed to add to new role.";
         public const string RemoveFromExistingRoles = "Failed to remove from existing roles.";
+        public const string UserAlreadyInRole = "User already has the specified role.";
+        public const string CannotDemoteAdmin = "Admin users cannot be demoted.";
+        public const string EventManagerRestrictions = "Event managers can only assign Staff or User roles.";
     }
 }

@@ -52,6 +52,13 @@ namespace CorpsAPI.Data
                 .WithOne(b => b.Event)
                 .HasForeignKey(b => b.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // if event manager is deleted, set the event's manager to null
+            builder.Entity<Event>()
+                .HasOne(e => e.EventManager)
+                .WithMany(u => u.ManagedEvents)
+                .HasForeignKey(e => e.EventManagerId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

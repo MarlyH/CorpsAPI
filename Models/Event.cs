@@ -11,7 +11,7 @@ namespace CorpsAPI.Models
         public int LocationId { get; set; }
         [ForeignKey("LocationId")]
         public Location? Location { get; set; }
-        public string EventManagerId { get; set; } = default!;
+        public string? EventManagerId { get; set; } = default!;
         [ForeignKey("EventManagerId")]
         public AppUser? EventManager { get; set; }
         [Required]
