@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CorpsAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250701022043_AddChildrenTable")]
-    partial class AddChildrenTable
+    [Migration("20250702014812_updatedAdminSeedAndEnforceDOBOnUserModelAndFixLocationFK")]
+    partial class updatedAdminSeedAndEnforceDOBOnUserModelAndFixLocationFK
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -211,9 +211,6 @@ namespace CorpsAPI.Migrations
                     b.Property<int>("LocationId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("LocationId1")
-                        .HasColumnType("int");
-
                     b.Property<string>("SeatingMapImgSrc")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -235,8 +232,6 @@ namespace CorpsAPI.Migrations
                     b.HasIndex("EventManagerId");
 
                     b.HasIndex("LocationId");
-
-                    b.HasIndex("LocationId1");
 
                     b.ToTable("Events");
                 });
@@ -437,14 +432,10 @@ namespace CorpsAPI.Migrations
                         .IsRequired();
 
                     b.HasOne("CorpsAPI.Models.Location", "Location")
-                        .WithMany()
+                        .WithMany("Events")
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("CorpsAPI.Models.Location", null)
-                        .WithMany("Events")
-                        .HasForeignKey("LocationId1");
 
                     b.Navigation("EventManager");
 

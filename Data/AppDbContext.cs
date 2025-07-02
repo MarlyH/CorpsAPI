@@ -35,7 +35,7 @@ namespace CorpsAPI.Data
             // don't touch location when event deleted
             builder.Entity<Event>()
                 .HasOne(e => e.Location)
-                .WithMany()
+                .WithMany(l => l.Events)
                 .HasForeignKey(e => e.LocationId)
                 .OnDelete(DeleteBehavior.Restrict);
 

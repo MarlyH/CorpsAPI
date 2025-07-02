@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace CorpsAPI.Migrations
 {
     /// <inheritdoc />
-    public partial class FixEventDeleteBehaviour : Migration
+    public partial class updatedAdminSeedAndEnforceDOBOnUserModelAndFixLocationFK : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -29,11 +29,29 @@ namespace CorpsAPI.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            migrationBuilder.AddColumn<int>(
-                name: "LocationId1",
-                table: "Events",
-                type: "int",
-                nullable: true);
+            migrationBuilder.CreateTable(
+                name: "Children",
+                columns: table => new
+                {
+                    ChildId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    DateOfBirth = table.Column<DateOnly>(type: "date", nullable: false),
+                    FirstName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    LastName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    EmergencyContactName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    EmergencyContactPhone = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ParentUserId = table.Column<string>(type: "nvarchar(450)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Children", x => x.ChildId);
+                    table.ForeignKey(
+                        name: "FK_Children_AspNetUsers_ParentUserId",
+                        column: x => x.ParentUserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Events_EventManagerId",
@@ -41,9 +59,9 @@ namespace CorpsAPI.Migrations
                 column: "EventManagerId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Events_LocationId1",
-                table: "Events",
-                column: "LocationId1");
+                name: "IX_Children_ParentUserId",
+                table: "Children",
+                column: "ParentUserId");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Events_AspNetUsers_EventManagerId",
@@ -60,13 +78,6 @@ namespace CorpsAPI.Migrations
                 principalTable: "Locations",
                 principalColumn: "LocationId",
                 onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Events_Locations_LocationId1",
-                table: "Events",
-                column: "LocationId1",
-                principalTable: "Locations",
-                principalColumn: "LocationId");
         }
 
         /// <inheritdoc />
@@ -80,16 +91,11 @@ namespace CorpsAPI.Migrations
                 name: "FK_Events_Locations_LocationId",
                 table: "Events");
 
-            migrationBuilder.DropForeignKey(
-                name: "FK_Events_Locations_LocationId1",
-                table: "Events");
+            migrationBuilder.DropTable(
+                name: "Children");
 
             migrationBuilder.DropIndex(
                 name: "IX_Events_EventManagerId",
-                table: "Events");
-
-            migrationBuilder.DropIndex(
-                name: "IX_Events_LocationId1",
                 table: "Events");
 
             migrationBuilder.DropColumn(
@@ -98,10 +104,6 @@ namespace CorpsAPI.Migrations
 
             migrationBuilder.DropColumn(
                 name: "EventManagerId",
-                table: "Events");
-
-            migrationBuilder.DropColumn(
-                name: "LocationId1",
                 table: "Events");
 
             migrationBuilder.AddForeignKey(
