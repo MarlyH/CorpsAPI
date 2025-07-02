@@ -65,11 +65,16 @@ namespace CorpsAPI.Controllers
             if (existingUser != null)
                 return BadRequest(new { message = ErrorMessages.EmailTaken });
 
-            var result = await _userManager.CreateAsync(user, dto.Password);
+            var createResult = await _userManager.CreateAsync(user, dto.Password);
+            if (!createResult.Succeeded)
+            {
+                // Add each IdentityError into ModelState for a ValidationProblem
+                foreach (var error in createResult.Errors)
+                    ModelState.AddModelError(string.Empty, error.Description);
 
-            // Check if the user was created before assigning the role
-            if (!result.Succeeded)
-                return BadRequest(new { message = result.Errors.Select(e => e.Description) });
+                // Returns 400 with a ProblemDetails payload showing each relevant error
+                return ValidationProblem(ModelState);
+            }
 
             // Now it's safe to assign a role
             await _userManager.AddToRoleAsync(user, Roles.User);
