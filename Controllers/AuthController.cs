@@ -1,20 +1,14 @@
 ﻿using System.Data;
-using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization.Metadata;
-using Azure.Core;
 using CorpsAPI.Constants;
 using CorpsAPI.DTOs.Auth;
-using CorpsAPI.DTOs.PasswordRecovery;
-using CorpsAPI.DTOs.Profile;
 using CorpsAPI.Models;
 using CorpsAPI.Services;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -27,11 +21,8 @@ namespace CorpsAPI.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        // private const string serverUrl = "https://localhost:7125";
-        private const string serverUrl = "http://localhost:5133";
         private readonly UserManager<AppUser> _userManager;
         private readonly SignInManager<AppUser> _signInManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly EmailService _emailService;
         private readonly TokenService _tokenService;
         private readonly IMemoryCache _memoryCache;
@@ -40,7 +31,6 @@ namespace CorpsAPI.Controllers
         public AuthController(
             UserManager<AppUser> userManager, 
             SignInManager<AppUser> signInManager, 
-            RoleManager<IdentityRole> roleManager,
             EmailService emailService,
             TokenService tokenService,
             IMemoryCache memoryCache,
@@ -48,7 +38,6 @@ namespace CorpsAPI.Controllers
         {
             _userManager = userManager;
             _signInManager = signInManager;
-            _roleManager = roleManager;
             _emailService = emailService;
             _tokenService = tokenService;
             _memoryCache = memoryCache;
@@ -89,7 +78,7 @@ namespace CorpsAPI.Controllers
             // Generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
-            var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+            var confirmationUrl = $"{ServerUrl.serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // Send email
             await _emailService.SendEmailAsync(user.Email, "Verify your email", 
@@ -100,7 +89,6 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = SuccessMessages.RegistrationSuccessful }); //(constant) string SuccessMessages.RegistrationSuccessful = "Registration successful. Please check your email to activate your account.
         }
-
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
@@ -212,8 +200,8 @@ namespace CorpsAPI.Controllers
             return Content(html, "text/html");
         }
 
-        [HttpPost("resend-confirmation")]
-        public async Task<IActionResult> ResendConfirmation([FromBody] ResendEmailDto dto)
+        [HttpPost("resend-confirmation-email")]
+        public async Task<IActionResult> ResendConfirmationEmail([FromBody] ResendEmailDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
@@ -229,7 +217,7 @@ namespace CorpsAPI.Controllers
             // generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
-            var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+            var confirmationUrl = $"{ServerUrl.serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // send email
             await _emailService.SendEmailAsync(user.Email, "Verify your email",
@@ -242,42 +230,6 @@ namespace CorpsAPI.Controllers
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
             return Ok(new { message =  SuccessMessages.EmailConfirmationResent });
-        }
-
-        [Authorize]
-        [HttpPost("request-email-change")]
-        public async Task<IActionResult> RequestEmailChange([FromBody] ChangeEmailRequestDto dto)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null) 
-                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
-
-            // Ensure requested address isn't taken
-            var existingUser = await _userManager.FindByEmailAsync(dto.NewEmail);
-            if (existingUser != null)
-                return BadRequest(new { message = ErrorMessages.EmailTaken });
-
-            var token = await _userManager.GenerateChangeEmailTokenAsync(user, dto.NewEmail);
-            var encodedToken = WebUtility.UrlEncode(token);
-
-            var url = $"{serverUrl}/api/auth/confirm-email-change?userId={user.Id}&newEmail={dto.NewEmail}&token={encodedToken}";
-            await _emailService.SendEmailAsync(dto.NewEmail, "Confirm Email Change", $"<a href='{url}'>Click here to confirm</a>");
-
-            return Ok(new { message = SuccessMessages.ChangeEmailRequest });
-        }
-
-        [HttpGet("confirm-email-change")]
-        public async Task<IActionResult> ConfirmEmailChange(string userId, string newEmail, string token)
-        {
-            var user = await _userManager.FindByIdAsync(userId);
-            if (user == null) 
-                return NotFound(new { message = ErrorMessages.InvalidRequest });
-
-            var result = await _userManager.ChangeEmailAsync(user, newEmail, token);
-            if (!result.Succeeded) 
-                return BadRequest(new { message = result.Errors } );
-
-            return Ok(new { message = SuccessMessages.ChangeEmailSuccess });
         }
 
         [HttpPost("refresh")]
@@ -354,246 +306,6 @@ namespace CorpsAPI.Controllers
             {
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
             }
-        }
-
-        [HttpPost("forgot-password")]
-        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
-        {
-            var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null || !user.EmailConfirmed)
-                // don't reveal that the user does not exist or email is not confirmed
-                return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
-
-            // generate token and 6-digit OTP code.
-            var resetPswdToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var otp = new Random().Next(100000, 999999).ToString();
-
-            // send email to user containing the OTP
-            await _emailService.SendEmailAsync(
-                user.Email,
-                "Reset Password",
-                $@"
-                <div style='
-                    background-color: #f9f9f9;
-                    padding: 40px 20px;
-                    font-family: Helvetica, Arial, sans-serif;
-                    text-align: center;
-                    color: #333;
-                '>
-                    <h2 style='margin-bottom: 24px;'>Reset Your Password</h2>
-
-                    <p style='font-size: 16px; margin-bottom: 30px;'>
-                        Use the one-time password (OTP) below to reset your account password. This code is valid for 10 minutes.
-                    </p>
-
-                    <div style='
-                        display: inline-block;
-                        font-size: 32px;
-                        font-weight: bold;
-                        letter-spacing: 6px;
-                        color: #ffffff;
-                        background-color: #007BFF;
-                        padding: 16px 32px;
-                        border-radius: 12px;
-                        margin-bottom: 30px;
-                    '>{otp}</div>
-
-                    <p style='font-size: 14px; color: #777; margin-top: 32px;'>
-                        If you didn't request a password reset, please ignore this message.<br>
-                        For security, do not share this code with anyone.
-                    </p>
-                </div>"
-            );
-            // store OTP in memory
-            _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(10));
-
-            // return token to client
-            return Ok(new
-            {
-                message = SuccessMessages.PasswordResetOtpSent,
-                resetPswdToken
-            });
-        }
-
-        [HttpPost("verify-otp")]
-        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
-        {
-            // check user and get values from memory to be validated against
-            var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null || !user.EmailConfirmed) 
-                return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
-            if (!_memoryCache.TryGetValue(dto.Email, out string otp)) 
-                return Unauthorized(new { message = ErrorMessages.ExpiredOtp });
-
-            // check otp
-            if (dto.Otp != otp) 
-                return BadRequest(new { message = ErrorMessages.IncorrectOtp });
-
-            // remove from memory
-            _memoryCache.Remove(user.Email);
-
-            return Ok();
-        }
-
-        [HttpPost("reset-password")]
-        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
-        {
-            var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null || !user.EmailConfirmed) 
-                return Unauthorized(new { message = ErrorMessages.AccountNotEligible });
-
-            // validate token. if valid, update password
-            var result = await _userManager.ResetPasswordAsync(user, dto.ResetPasswordToken, dto.NewPassword);
-            if (!result.Succeeded)
-            {
-                var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
-                return BadRequest(new { message = $"Password reset failed:\n{errorMessages}" });
-            }
-
-            return Ok(new { message = SuccessMessages.PasswordSuccessfullyReset });
-        }
-
-        [HttpPost("change-password")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequestDto dto)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return NotFound(new { message = ErrorMessages.InvalidRequest });
-
-            var result = await _userManager.ChangePasswordAsync(user, dto.OldPassword, dto.NewPassword);
-
-            if (!result.Succeeded)
-            {
-                var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
-                return BadRequest(new { message = "Password change failed:\n" + errorMessages });
-            }
-                
-            return Ok(new { message = SuccessMessages.PasswordChangeSuccessful });
-        }
-
-        [HttpGet("profile")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
-        public async Task<IActionResult> GetProfile()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return NotFound(new { message = ErrorMessages.InvalidRequest });
-
-            var dto = new UserProfileDto
-            {
-                UserName = user.UserName,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Email = user.Email,
-                Age= user.Age
-            };
-
-            return Ok(dto);
-        }
-
-        [HttpPatch("profile")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
-        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequestDto dto)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return NotFound(new { message = ErrorMessages.InvalidRequest });
-
-            /*if (!string.IsNullOrEmpty(dto.NewEmail) && dto.NewEmail != user.Email)
-            {
-                var emailExists = await _userManager.FindByEmailAsync(dto.NewEmail);
-                if (emailExists != null) 
-                    return BadRequest(new { message = ErrorMessages.EmailTaken });
-
-                user.Email = dto.NewEmail;
-            }*/
-
-            if (!string.IsNullOrEmpty(dto.NewUserName) && dto.NewUserName != user.UserName)
-            {
-                var userNameExists = await _userManager.FindByNameAsync(dto.NewUserName);
-                if (userNameExists != null)
-                    return BadRequest(new { message = ErrorMessages.UserNameTaken });
-
-                user.UserName = dto.NewUserName;
-            }
-
-            // only update if provided
-            user.FirstName = dto.NewFirstName ?? user.FirstName;
-            user.LastName = dto.NewLastName ?? user.LastName;
-
-            var result = await _userManager.UpdateAsync(user);
-            
-            if (!result.Succeeded)
-            {
-                var errorMessages = string.Join(",\n", result.Errors.Select(e => e.Description));
-                return BadRequest(new { message = "Update failed:\n" + errorMessages });
-            }
-
-            return Ok(new { message = SuccessMessages.ProfileUpdateSuccessful });
-        }
-
-        [HttpDelete("profile")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff},{Roles.User}")]
-        public async Task<IActionResult> DeleteProfile()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return NotFound(new { message = ErrorMessages.InvalidRequest });
-
-            var result = await _userManager.DeleteAsync(user);
-
-            if (!result.Succeeded)
-                return BadRequest(new { message = ErrorMessages.InvalidRequest });
-
-            return Ok(new { message = SuccessMessages.ProfileDeleteSuccessful });
-        }
-
-        [HttpPost("change-role")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
-        public async Task<IActionResult> ChangeUserRole([FromBody] ChangeUserRole dto)
-        {
-            // normalise (user => User)
-            dto.Role = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(dto.Role.ToLower());
-
-            // event managers can only change the roles of users/staff
-            if (User.IsInRole(Roles.EventManager)
-                && dto.Role != Roles.Staff
-                && dto.Role != Roles.User)
-            {
-                return BadRequest(new { message = ErrorMessages.EventManagerRestrictions });
-            }
-
-            var user = await _userManager.FindByEmailAsync(dto.Email);
-            if (user == null)
-                return NotFound("User not found");
-
-            // ensure role actually exists
-            if (!await _roleManager.RoleExistsAsync(dto.Role))
-                return BadRequest(new { message = ErrorMessages.RoleNotExist });
-
-            // get old roles
-            var currentRoles = await _userManager.GetRolesAsync(user);
-
-            // don't let admins be demoted
-            if (currentRoles.Contains(Roles.Admin))
-                return BadRequest(new { message = ErrorMessages.CannotDemoteAdmin });
-
-            // no change if the user already has only the target role
-            if (currentRoles.Count == 1 && currentRoles.Contains(dto.Role))
-                return BadRequest(new { message = ErrorMessages.UserAlreadyInRole });
-
-            // add user to new role
-            var resultAdd = await _userManager.AddToRoleAsync(user, dto.Role);
-            if (!resultAdd.Succeeded)
-                return BadRequest(new { message = ErrorMessages.AddToRoleFailed });
-
-            // remove from old roles
-            var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
-            if (!removeResult.Succeeded)
-                return BadRequest(new { message = ErrorMessages.RemoveFromExistingRoles });
-
-            return Ok(new { message = SuccessMessages.ChangeRoleSuccess });
         }
     }
 }
