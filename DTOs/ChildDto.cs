@@ -9,8 +9,6 @@ namespace CorpsAPI.DTOs.Child
         public string EmergencyContactName { get; set; } = default!;
         public string EmergencyContactPhone { get; set; } = default!;
         public int Age { get; set; }
-        public string AgeGroup { get; set; } = default!;
-        public string AgeGroupLabel { get; set; } = default!;
     }
 
     public class CreateChildDto

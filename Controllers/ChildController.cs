@@ -54,9 +54,7 @@ namespace CorpsAPI.Controllers
                 DateOfBirth = c.DateOfBirth,
                 EmergencyContactName = c.EmergencyContactName,
                 EmergencyContactPhone = c.EmergencyContactPhone,
-                Age = c.Age,
-                AgeGroup = c.AgeGroup.ToString(),
-                AgeGroupLabel = c.AgeGroupLabel
+                Age = c.Age
             });
 
             return Ok(result);
@@ -96,9 +94,7 @@ namespace CorpsAPI.Controllers
                 DateOfBirth = child.DateOfBirth,
                 EmergencyContactName = child.EmergencyContactName,
                 EmergencyContactPhone = child.EmergencyContactPhone,
-                Age = child.Age,
-                AgeGroup = child.AgeGroup.ToString(),
-                AgeGroupLabel = child.AgeGroupLabel
+                Age = child.Age
             });
         }
 

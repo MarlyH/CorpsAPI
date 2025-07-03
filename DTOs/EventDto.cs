@@ -9,6 +9,7 @@ namespace CorpsAPI.DTOs
         public EventSessionType SessionType { get; set; }
         public DateOnly StartDate { get; set; }
         public TimeOnly StartTime { get; set; }
+        public TimeOnly EndTime { get; set; }
         public DateOnly AvailableDate { get; set; }
         public string SeatingMapImgSrc { get; set; } = default!;
         public int TotalSeats { get; set; }

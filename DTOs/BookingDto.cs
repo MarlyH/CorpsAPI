@@ -7,6 +7,8 @@ namespace CorpsAPI.DTOs
         public int EventId { get; set; }
         public int SeatNumber { get; set; }
         public bool CanBeLeftAlone { get; set; } = false;
+        public bool IsForChild { get; set; } = false;
+        public int? ChildId { get; set; }
     }
 
     public class BookingResponseDto

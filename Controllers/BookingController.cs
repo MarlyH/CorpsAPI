@@ -43,30 +43,69 @@ namespace CorpsAPI.Controllers
             if (eventEntity.Bookings.Any(b => b.SeatNumber == dto.SeatNumber))
                 return BadRequest(new { message = "That seat is already taken." });
 
+            if(dto.SeatNumber > eventEntity.TotalSeats || dto.SeatNumber < 1)
+                return BadRequest(new { message = "Seat out of bounds." });
+
             if (eventEntity.AvailableSeats <= 0)
                 return BadRequest(new { message = "No seats available." });
 
-            /*switch (eventEntity.SessionType)
+            int bookingAge;
+            if (dto.IsForChild)
+            {
+                if (eventEntity.Bookings.Any(b => b.ChildId == dto.ChildId))
+                    return BadRequest(new { message = "This child already has a booking for this event." });
+
+                var child = await _context.Children.FindAsync(dto.ChildId);
+                if (child == null)
+                    return BadRequest(new { message = "Booking is for child but child ID not found." });
+                
+                bookingAge = child.Age;
+            }
+            else
+            {
+                if (eventEntity.Bookings.Any(b => b.UserId == user.Id))
+                    return BadRequest(new { message = "You already have a booking for this event." });
+                bookingAge = user.Age;
+            }
+
+            bool AgeIsOk = false;
+
+            switch (eventEntity.SessionType)
             {
                 case EventSessionType.Kids:
-                    if (user.Age < 5 && user.Age > 12)
-                    {
-                        //create booking
-                    }
-                    else
-                    {
-                        // no booking
-                    }
-            }*/
+                    if (bookingAge >= 5 && bookingAge < 12)
+                        AgeIsOk = true;
+                    break;
+
+                case EventSessionType.Teens:
+                    if (bookingAge >= 12 && bookingAge < 16)
+                        AgeIsOk = true;
+                    break;
+
+                case EventSessionType.Adults:
+                    if (bookingAge >= 16)
+                        AgeIsOk = true;
+                    break;
+
+                default:
+                    return BadRequest(new { message = ErrorMessages.InternalServerError });
+            }
+
+            if (!AgeIsOk)
+            {
+                return BadRequest(new { message = "Provided age for the booking is not within bounds."});
+            }
 
             var booking = new Booking
             {
                 EventId = dto.EventId,
                 SeatNumber = dto.SeatNumber,
                 CanBeLeftAlone = dto.CanBeLeftAlone,
-                AttendingUserId = user.Id,
+                UserId = user.Id,
                 Status = BookingStatus.Booked,
-                QrCodeData = Guid.NewGuid().ToString()
+                QrCodeData = Guid.NewGuid().ToString(), // TODO: proper implementation
+                IsForChild = dto.IsForChild,
+                ChildId = dto.ChildId
             };
 
             _context.Bookings.Add(booking);
@@ -85,7 +124,7 @@ namespace CorpsAPI.Controllers
 
             var bookings = await _context.Bookings
                 .Include(b => b.Event)
-                .Where(b => b.AttendingUserId == userId)
+                .Where(b => b.UserId == userId)
                 .Select(b => new BookingResponseDto
                 {
                     BookingId = b.BookingId,
@@ -109,7 +148,7 @@ namespace CorpsAPI.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var booking = await _context.Bookings.FindAsync(id);
 
-            if (booking == null || booking.AttendingUserId != userId)
+            if (booking == null || booking.UserId != userId)
                 return NotFound(new { message = "Booking not found." });
 
             _context.Bookings.Remove(booking);

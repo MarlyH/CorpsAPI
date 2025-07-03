@@ -89,6 +89,7 @@ namespace CorpsAPI.Controllers
                 SessionType = dto.SessionType,
                 StartDate = dto.StartDate,
                 StartTime = dto.StartTime,
+                EndTime = dto.EndTime,
                 AvailableDate = dto.AvailableDate,
                 SeatingMapImgSrc = dto.SeatingMapImgSrc,
                 TotalSeats = dto.TotalSeats,

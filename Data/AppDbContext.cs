@@ -27,9 +27,9 @@ namespace CorpsAPI.Data
 
             // set attending user to null if user deleted (retain their bookings for reporting)
             builder.Entity<Booking>()
-                .HasOne(b => b.AttendingUser)
+                .HasOne(b => b.User)
                 .WithMany(u => u.Bookings)
-                .HasForeignKey(b => b.AttendingUserId)
+                .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
 
             // don't touch location when event deleted
