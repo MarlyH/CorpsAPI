@@ -141,7 +141,23 @@ namespace CorpsAPI.Controllers
             return Ok(bookings);
         }
 
-        [HttpDelete("{id}")]
+        [HttpPut("cancel/{id}")]
+        [Authorize]
+        public async Task<IActionResult> CancelBooking(int id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var booking = await _context.Bookings.FindAsync(id);
+
+            if (booking == null || booking.UserId != userId)
+                return NotFound(new { message = "Booking not found." });
+
+            booking.Status = BookingStatus.Cancelled;
+            booking.SeatNumber = null;
+            var result = await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Booking successfully cancelled." });
+        }
+        /*[HttpDelete("{id}")]
         [Authorize]
         public async Task<IActionResult> CancelBooking(int id)
         {
@@ -155,7 +171,7 @@ namespace CorpsAPI.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Booking cancelled." });
-        }
+        }*/
 
         [HttpPost("scan")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]

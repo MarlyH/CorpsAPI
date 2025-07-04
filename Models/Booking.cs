@@ -13,8 +13,7 @@ namespace CorpsAPI.Models
         public string? UserId { get; set; } // nullable in case user is deleted. We want to retain booking records
         [ForeignKey("UserId")]
         public AppUser? User { get; set; }
-        [Required]
-        public int SeatNumber { get; set; }
+        public int? SeatNumber { get; set; } // nullable for when cancelling to prevent "seat already taken" errors
         public BookingStatus Status { get; set; }
         public bool CanBeLeftAlone { get; set; } = false;
         public string QrCodeData { get; set; } = default!;
@@ -28,6 +27,7 @@ namespace CorpsAPI.Models
     {
         Booked,
         CheckedIn,
-        CheckedOut
+        CheckedOut,
+        Cancelled
     }
 }

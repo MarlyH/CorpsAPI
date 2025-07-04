@@ -32,7 +32,7 @@ namespace CorpsAPI.DTOs
             EndTime = e.EndTime;
             Description = e.Description;
             Address = e.Address;
-            AvailbleSeatsCount = e.TotalSeats - e.Bookings.Count;
+            AvailbleSeatsCount = e.AvailableSeats;
         }
         public int EventId { get; set; }
         public string LocationName { get; set; } = default!;
@@ -64,7 +64,7 @@ namespace CorpsAPI.DTOs
             SeatingMapImgSrc = e.SeatingMapImgSrc;
 
             // Get available seat numbers
-            var bookedSeats = e.Bookings?.Select(b => b.SeatNumber).ToHashSet() ?? new HashSet<int>();
+            var bookedSeats = e.Bookings?.Select(b => b.SeatNumber).ToHashSet() ?? new HashSet<int?>();
             for (int i = 1; i <= e.TotalSeats; i++)
             {
                 if (!bookedSeats.Contains(i))

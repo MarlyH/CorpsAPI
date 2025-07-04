@@ -28,7 +28,7 @@ namespace CorpsAPI.Models
         public int TotalSeats { get; set; }
         public List<Booking> Bookings { get; set; } = new();
         [NotMapped]
-        public int AvailableSeats { get { return TotalSeats - (Bookings?.Count ?? 0); } }
+        public int AvailableSeats { get { return TotalSeats - (Bookings?.Count(b => b.Status != BookingStatus.Cancelled) ?? 0); } }
         [MaxLength(500)]
         public string? Description { get; set; }
         [MaxLength(100)]
