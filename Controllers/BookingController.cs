@@ -103,7 +103,7 @@ namespace CorpsAPI.Controllers
                 CanBeLeftAlone = dto.CanBeLeftAlone,
                 UserId = user.Id,
                 Status = BookingStatus.Booked,
-                QrCodeData = Guid.NewGuid().ToString(), // TODO: proper implementation
+                QrCodeData = Guid.NewGuid().ToString(),
                 IsForChild = dto.IsForChild,
                 ChildId = dto.ChildId
             };
@@ -156,5 +156,35 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = "Booking cancelled." });
         }
-    }
+
+        [HttpPost("scan")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
+        public async Task<IActionResult> ScanQrCode([FromBody] ScanQrCodeDto dto)
+        {
+            var booking = await _context.Bookings
+                .Include(b => b.Event)
+                .FirstOrDefaultAsync(b => b.QrCodeData == dto.QrCodeData);
+
+            if (booking == null)
+                return NotFound(new { message = "Invalid QR code." });
+
+            switch (booking.Status)
+            {
+                case BookingStatus.Booked:
+                    booking.Status = BookingStatus.CheckedIn;
+                    break;
+                case BookingStatus.CheckedIn:
+                    booking.Status = BookingStatus.CheckedOut;
+                    break;
+                case BookingStatus.CheckedOut:
+                    return BadRequest(new { message = "Booking already checked out." });
+                default:
+                    return BadRequest(new { message = "Unknown booking status." });
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Booking status updated."  });
+        }
+    }     
 }

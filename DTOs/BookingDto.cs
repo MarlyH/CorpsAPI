@@ -22,4 +22,9 @@ namespace CorpsAPI.DTOs
         public bool CanBeLeftAlone { get; set; }
         public string QrCodeData { get; set; } = default!;
     }
+
+    public class ScanQrCodeDto
+    {
+        public string QrCodeData { get; set; } = default!;
+    }
 }
