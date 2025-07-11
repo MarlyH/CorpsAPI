@@ -17,5 +17,6 @@
         public const string EventCancelSuccessful = "Event successfully cancelled and attendees notified.";
         public const string WaitlistAddSuccessful = "Successfully added to waitlist.";
         public const string WaitlistRemoveSuccessful = "Successfully removed from waitlist.";
+        public const string DeviceTokenCreateSuccessful = "Device token successfully saved.";
     }
 }

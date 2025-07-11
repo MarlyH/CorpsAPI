@@ -64,7 +64,7 @@ namespace CorpsAPI.Controllers
         [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
         public async Task<IActionResult> PostEvent([FromBody] CreateEventDto dto)
         {
-            var eventManagerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var eventManagerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(eventManagerId))
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
@@ -203,7 +203,7 @@ namespace CorpsAPI.Controllers
         [Authorize]
         public async Task<IActionResult> RemoveFromWaitlist(int eventId)
         {
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
