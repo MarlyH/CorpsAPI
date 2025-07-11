@@ -86,6 +86,11 @@ namespace CorpsAPI.DTOs
         public string SeatingMapImgSrc { get; set; } = default!;
     }
 
+    public class CancelEventRequestDto
+    {
+        public string? CancellationMessage { get; set; }
+    }
+
     public class LocationDto
     {
         public int LocationId { get; set; }

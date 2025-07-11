@@ -26,5 +26,11 @@
         public const string UserAlreadyInRole = "User already has the specified role.";
         public const string CannotDemoteAdmin = "Admin users cannot be demoted.";
         public const string EventManagerRestrictions = "Event managers can only assign Staff or User roles.";
+
+        // event errors
+        public const string EventCancelUnauthorised = "Only the event manager or an admin can cancel the event.";
+        public const string EventNotFound = "An event with this ID does not exist or has been cancelled.";
+        public const string EventNotAvailable = "The event must be available before it starts.";
+
     }
 }

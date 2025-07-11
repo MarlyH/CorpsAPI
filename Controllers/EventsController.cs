@@ -6,6 +6,7 @@ using CorpsAPI.Constants;
 using CorpsAPI.Data;
 using CorpsAPI.DTOs;
 using CorpsAPI.Models;
+using CorpsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +30,7 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> GetEvents()
         {
             var events = await _context.Events
+                .Where(e => !e.IsCancelled)
                 .Include(e => e.Location)
                 .Include(e => e.Bookings)
                 .ToListAsync();
@@ -45,16 +47,15 @@ namespace CorpsAPI.Controllers
             var ev = await _context.Events
                 .Include(e => e.Location)
                 .Include(e => e.Bookings)
-                .FirstOrDefaultAsync(e => e.EventId == id);
+                .FirstOrDefaultAsync(e => e.EventId == id && !e.IsCancelled);
 
             if (ev == null)
-                return NotFound(new { message = "Event not found." });
+                return NotFound(new { message = ErrorMessages.EventNotFound });
 
             var dto = new GetEventDto(ev);
 
             return Ok(dto);
         }
-
 
         // POST: api/Events
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
@@ -64,9 +65,7 @@ namespace CorpsAPI.Controllers
         {
             var eventManagerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(eventManagerId))
-            {
-                return Unauthorized(new { message = "User ID not found in token." });
-            }
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
             if (!ModelState.IsValid)
             {
@@ -80,7 +79,7 @@ namespace CorpsAPI.Controllers
             }
 
             if (dto.AvailableDate > dto.StartDate)
-                return BadRequest(new { message = "The event must be available before it starts." });
+                return BadRequest(new { message = ErrorMessages.EventNotAvailable });
 
             var newEvent = new Event
             {
@@ -100,14 +99,57 @@ namespace CorpsAPI.Controllers
             _context.Events.Add(newEvent);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Event successfully created." });
+            return Ok(new { message = SuccessMessages.EventCreateSuccessful });
         }
 
-        /*// DELETE: api/Events/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteEvent(int id)
+        [HttpPut("{id}/cancel")]
+        [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
+        public async Task<IActionResult> CancelEvent(int id, [FromBody] CancelEventRequestDto dto, [FromServices] EmailService emailService)
         {
-            // event cancellation flow here
-        }*/
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var ev = await _context.Events
+                .Include(e => e.Bookings)
+                    .ThenInclude(b => b.User)
+                .FirstOrDefaultAsync(e => e.EventId == id);
+
+            if (ev == null)
+                return NotFound(new { message = ErrorMessages.InvalidRequest });
+
+            // Only the manager for the particular event or an admin should be able to cancel
+            if (ev.EventManagerId != userId && !User.IsInRole(Roles.Admin))
+                return BadRequest(new { message = ErrorMessages.EventCancelUnauthorised});
+
+            // Cancel all associated bookings that aren't already cancelled
+            foreach (var booking in ev.Bookings.Where(b => b.Status != BookingStatus.Cancelled))
+            {
+                booking.Status = BookingStatus.Cancelled;
+
+                if (!string.IsNullOrWhiteSpace(booking.User?.Email))
+                {
+                    var emailBody = $@"
+                <p>Dear {booking.User.UserName},</p>
+                <p>The event you booked on <strong>{ev.StartDate}</strong> at <strong>{ev.StartTime}</strong> has been <strong>cancelled</strong>.</p>";
+
+                    if (!string.IsNullOrWhiteSpace(dto.CancellationMessage))
+                        emailBody += $"<p><strong>Message from the organiser:</strong> {dto.CancellationMessage}</p>";
+
+                    emailBody += "<p>We apologise for any inconvenience caused.</p>";
+
+                    await emailService.SendEmailAsync(
+                        booking.User.Email,
+                        "Your event has been cancelled",
+                        emailBody
+                    );
+                }
+            }
+
+            ev.IsCancelled = true;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = SuccessMessages.EventCancelSuccessful });
+        }
     }
 }

@@ -35,6 +35,7 @@ namespace CorpsAPI.Models
         public string? Address { get; set; }
         [NotMapped]
         public int AttendanceCount { get { return Bookings?.Count(b => b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut) ?? 0; } }
+        public bool IsCancelled { get; set; } = false;
     }
 
     public enum EventSessionType

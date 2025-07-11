@@ -13,5 +13,7 @@
         public const string ChangeEmailRequest = "Verification sent to new email.";
         public const string ChangeEmailSuccess = "Email successfully changed.";
         public const string ChangeRoleSuccess = "User role successfully changed.";
+        public const string EventCreateSuccessful = "Event successfully created.";
+        public const string EventCancelSuccessful = "Event successfully cancelled and attendees notified.";
     }
 }
