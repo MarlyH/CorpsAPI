@@ -27,6 +27,7 @@ namespace CorpsAPI.Models
         public string SeatingMapImgSrc { get; set; } = default!;
         public int TotalSeats { get; set; }
         public List<Booking> Bookings { get; set; } = new();
+        public List<Waitlist> Waitlists { get; set; } = new();
         [NotMapped]
         public int AvailableSeats { get { return TotalSeats - (Bookings?.Count(b => b.Status != BookingStatus.Cancelled) ?? 0); } }
         [MaxLength(500)]

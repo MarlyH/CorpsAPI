@@ -16,6 +16,7 @@ namespace CorpsAPI.Data
         public DbSet<Event> Events { get; set; }
         public DbSet<Location> Locations { get; set; }
         public DbSet<Child> Children { get; set; }
+        public DbSet<Waitlist> Waitlists { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -59,6 +60,10 @@ namespace CorpsAPI.Data
                 .WithMany(u => u.ManagedEvents)
                 .HasForeignKey(e => e.EventManagerId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // set composite key for Waitlist
+            builder.Entity<Waitlist>()
+                .HasKey(w => new { w.UserId, w.EventId });
         }
     }
 }

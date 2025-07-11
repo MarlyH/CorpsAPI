@@ -4,6 +4,7 @@ using CorpsAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CorpsAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250711050507_AddWaitlistsTableWithCompositeKey")]
+    partial class AddWaitlistsTableWithCompositeKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -274,8 +277,6 @@ namespace CorpsAPI.Migrations
 
                     b.HasKey("UserId", "EventId");
 
-                    b.HasIndex("EventId");
-
                     b.ToTable("Waitlists");
                 });
 
@@ -443,7 +444,7 @@ namespace CorpsAPI.Migrations
             modelBuilder.Entity("CorpsAPI.Models.Child", b =>
                 {
                     b.HasOne("CorpsAPI.Models.AppUser", "ParentUser")
-                        .WithMany("Children")
+                        .WithMany("Child")
                         .HasForeignKey("ParentUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -467,25 +468,6 @@ namespace CorpsAPI.Migrations
                     b.Navigation("EventManager");
 
                     b.Navigation("Location");
-                });
-
-            modelBuilder.Entity("CorpsAPI.Models.Waitlist", b =>
-                {
-                    b.HasOne("CorpsAPI.Models.Event", "Event")
-                        .WithMany("Waitlists")
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CorpsAPI.Models.AppUser", "User")
-                        .WithMany("Waitlists")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Event");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -543,18 +525,14 @@ namespace CorpsAPI.Migrations
                 {
                     b.Navigation("Bookings");
 
-                    b.Navigation("Children");
+                    b.Navigation("Child");
 
                     b.Navigation("ManagedEvents");
-
-                    b.Navigation("Waitlists");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.Event", b =>
                 {
                     b.Navigation("Bookings");
-
-                    b.Navigation("Waitlists");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.Location", b =>

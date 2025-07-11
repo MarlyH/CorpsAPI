@@ -10,7 +10,9 @@ namespace CorpsAPI.Models
         public string LastName { get; set; } = default!;
         public List<Booking> Bookings { get; set; } = new();
         public List<Event> ManagedEvents { get; set; } = new();
-        public List<Child> Child { get; set; } = new();
+        public List<Child> Children { get; set; } = new();
+        public List<Waitlist> Waitlists { get; set; } = new();
+
         [NotMapped]
         public int Age 
         { 
