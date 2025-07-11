@@ -15,5 +15,7 @@
         public const string ChangeRoleSuccess = "User role successfully changed.";
         public const string EventCreateSuccessful = "Event successfully created.";
         public const string EventCancelSuccessful = "Event successfully cancelled and attendees notified.";
+        public const string WaitlistAddSuccessful = "Successfully added to waitlist.";
+        public const string WaitlistRemoveSuccessful = "Successfully removed from waitlist.";
     }
 }

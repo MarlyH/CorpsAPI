@@ -97,4 +97,15 @@ namespace CorpsAPI.DTOs
         public string Name { get; set; } = default!;
         public string? MascotImgSrc { get; set; }
     }
+
+    public class GetWaitlistDto
+    {
+        public GetWaitlistDto(Waitlist waitlist)
+        {
+            UserId = waitlist.UserId;
+            EventId = waitlist.EventId;
+        }
+        public string UserId { get; set; }
+        public int EventId { get; set; }
+    }
 }

@@ -32,5 +32,9 @@
         public const string EventNotFound = "An event with this ID does not exist or has been cancelled.";
         public const string EventNotAvailable = "The event must be available before it starts.";
 
+        // waitlist errors
+        public const string AlreadyOnWaitlist = "You are already on the waitlist for this event.";
+        public const string NotOnWaitlist = "You are not on the waitlist.";
+        public const string SeatsStillAvailable = "Can't add to waitlist if there are currently seats available.";
     }
 }

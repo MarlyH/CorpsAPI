@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using CorpsAPI.Constants;
 using CorpsAPI.Data;
@@ -150,6 +151,72 @@ namespace CorpsAPI.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = SuccessMessages.EventCancelSuccessful });
+        }
+
+        // Waitlist stuff
+
+        [HttpGet("{eventId}/waitlist")]
+        [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
+        public async Task<IActionResult> GetWaitlist(int eventId)
+        {
+            var waitlist = await _context.Waitlists
+                .Where(w => w.EventId == eventId)
+                .Select(w => new GetWaitlistDto(w))
+                .ToListAsync();
+
+            return Ok(waitlist);
+        }
+
+        [HttpPost("{eventId}/waitlist")]
+        [Authorize]
+        public async Task<IActionResult> AddToWaitlist(int eventId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var alreadyExists = await _context.Waitlists
+                .AnyAsync(w => w.EventId == eventId && w.UserId == userId);
+            if (alreadyExists)
+                return BadRequest(new { message = ErrorMessages.AlreadyOnWaitlist });
+
+            var ev = await _context.Events.FindAsync(eventId);
+            if (ev == null)
+                return NotFound(new { message = ErrorMessages.EventNotFound });
+
+            if (ev.AvailableSeats > 0)
+                return BadRequest(new { message = ErrorMessages.SeatsStillAvailable });
+
+            var entry = new Waitlist
+            {
+                EventId = eventId,
+                UserId = userId
+            };
+
+            _context.Waitlists.Add(entry);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = SuccessMessages.WaitlistAddSuccessful });
+        }
+
+        [HttpDelete("{eventId}/waitlist")]
+        [Authorize]
+        public async Task<IActionResult> RemoveFromWaitlist(int eventId)
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var entry = await _context.Waitlists
+                .FirstOrDefaultAsync(w => w.EventId == eventId && w.UserId == userId);
+
+            if (entry == null)
+                return NotFound(new { message = ErrorMessages.NotOnWaitlist });
+
+            _context.Waitlists.Remove(entry);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = SuccessMessages.WaitlistRemoveSuccessful });
         }
     }
 }

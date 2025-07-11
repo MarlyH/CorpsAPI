@@ -52,7 +52,7 @@ namespace CorpsAPI.Controllers
             int bookingAge;
             if (dto.IsForChild)
             {
-                if (eventEntity.Bookings.Any(b => b.ChildId == dto.ChildId))
+                if (eventEntity.Bookings.Any(b => b.ChildId == dto.ChildId && b.Status != BookingStatus.Cancelled))
                     return BadRequest(new { message = "This child already has a booking for this event." });
 
                 var child = await _context.Children.FindAsync(dto.ChildId);
@@ -143,35 +143,56 @@ namespace CorpsAPI.Controllers
 
         [HttpPut("cancel/{id}")]
         [Authorize]
-        public async Task<IActionResult> CancelBooking(int id)
+        public async Task<IActionResult> CancelBooking(int id, [FromServices] EmailService emailService)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var booking = await _context.Bookings.FindAsync(id);
+            var booking = await _context.Bookings
+                .Include(b => b.Event)
+                .FirstOrDefaultAsync(b => b.BookingId == id);
 
             if (booking == null || booking.UserId != userId)
                 return NotFound(new { message = "Booking not found." });
+
+            // get available seats before we actually cancel booking.
+            // This way we can check if the event was full.
+            var ev = booking.Event!;
+            bool wasFull = ev.AvailableSeats <= 0;
 
             booking.Status = BookingStatus.Cancelled;
             booking.SeatNumber = null;
             var result = await _context.SaveChangesAsync();
 
+            if (wasFull)
+            {
+                // send email to anybody on waitlist
+
+                var waitlistEntries = await _context.Waitlists
+                    .Where(w => w.EventId == ev.EventId)
+                    .Include(w => w.User)
+                    .ToListAsync();
+
+                foreach (var entry in waitlistEntries)
+                {
+                    var user = entry.User!;
+                    var emailBody = $@"
+                            <p>Dear {user.UserName},</p>
+                            <p>A seat has been made available for the event on <strong>{ev.StartDate}</strong> at <strong>{ev.StartTime}</strong>.</p>";
+
+                    await emailService.SendEmailAsync(
+                        user.Email!,
+                        "Seat Available: Event Notification",
+                        emailBody
+                    );
+
+                    // now mark waitlist entity for deletion
+                    _context.Remove(entry);
+                    
+                }
+                // delete all at once
+                await _context.SaveChangesAsync();
+            }
             return Ok(new { message = "Booking successfully cancelled." });
         }
-        /*[HttpDelete("{id}")]
-        [Authorize]
-        public async Task<IActionResult> CancelBooking(int id)
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var booking = await _context.Bookings.FindAsync(id);
-
-            if (booking == null || booking.UserId != userId)
-                return NotFound(new { message = "Booking not found." });
-
-            _context.Bookings.Remove(booking);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Booking cancelled." });
-        }*/
 
         [HttpPost("scan")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
