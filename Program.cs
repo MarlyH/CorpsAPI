@@ -61,6 +61,9 @@ namespace CorpsAPI
             // register JWT service
             builder.Services.AddScoped<TokenService>();
 
+            // register Azure storage service
+            builder.Services.AddScoped<AzureStorageService>();
+
             // register memory cache for pswd reset OTPs
             builder.Services.AddMemoryCache();
 

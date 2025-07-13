@@ -11,12 +11,12 @@ namespace CorpsAPI.DTOs
         public TimeOnly StartTime { get; set; }
         public TimeOnly EndTime { get; set; }
         public DateOnly AvailableDate { get; set; }
-        public string SeatingMapImgSrc { get; set; } = default!;
         public int TotalSeats { get; set; }
         [MaxLength(500)]
         public string? Description { get; set; }
         [MaxLength(100)]
         public string? Address { get; set; }
+        public IFormFile SeatingMapImage { get; set; } = default!;
     }
 
     public class GetAllEventsDto

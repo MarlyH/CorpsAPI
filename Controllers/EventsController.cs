@@ -20,10 +20,12 @@ namespace CorpsAPI.Controllers
     public class EventsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly AzureStorageService _azureStorageService;
 
-        public EventsController(AppDbContext context)
+        public EventsController(AppDbContext context, AzureStorageService azureStorageService)
         {
             _context = context;
+            _azureStorageService = azureStorageService;
         }
 
         // GET: api/Events
@@ -62,7 +64,9 @@ namespace CorpsAPI.Controllers
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
         [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
-        public async Task<IActionResult> PostEvent([FromBody] CreateEventDto dto)
+        [RequestSizeLimit(10 * 1024 * 1024)] // Limit to 10MB
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> PostEvent([FromForm] CreateEventDto dto)
         {
             var eventManagerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(eventManagerId))
@@ -82,6 +86,17 @@ namespace CorpsAPI.Controllers
             if (dto.AvailableDate > dto.StartDate)
                 return BadRequest(new { message = ErrorMessages.EventNotAvailable });
 
+            // upload the seating map image
+            string imageUrl;
+            try
+            {
+                imageUrl = await _azureStorageService.UploadImageAsync(dto.SeatingMapImage);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Image upload failed", detail = ex.Message });
+            }
+
             var newEvent = new Event
             {
                 LocationId = dto.LocationId,
@@ -91,7 +106,7 @@ namespace CorpsAPI.Controllers
                 StartTime = dto.StartTime,
                 EndTime = dto.EndTime,
                 AvailableDate = dto.AvailableDate,
-                SeatingMapImgSrc = dto.SeatingMapImgSrc,
+                SeatingMapImgSrc = imageUrl,
                 TotalSeats = dto.TotalSeats,
                 Description = dto.Description,
                 Address = dto.Address
