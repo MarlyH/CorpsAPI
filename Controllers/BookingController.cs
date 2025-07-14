@@ -18,11 +18,13 @@ namespace CorpsAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly UserManager<AppUser> _userManager;
+        private readonly EmailService _emailService;
 
-        public BookingController(AppDbContext context, UserManager<AppUser> userManager)
+        public BookingController(AppDbContext context, UserManager<AppUser> userManager, EmailService emailService)
         {
             _context = context;
             _userManager = userManager;
+            _emailService = emailService;
         }
 
         [HttpPost]
@@ -35,6 +37,7 @@ namespace CorpsAPI.Controllers
 
             var eventEntity = await _context.Events
                 .Include(e => e.Bookings)
+                .Include(e => e.Location)
                 .FirstOrDefaultAsync(e => e.EventId == dto.EventId);
 
             if (eventEntity == null)
@@ -110,6 +113,34 @@ namespace CorpsAPI.Controllers
 
             _context.Bookings.Add(booking);
             await _context.SaveChangesAsync();
+
+            // send confirmation email
+            var emailBody = $@"
+                <p>Dear {user.UserName},</p>
+
+                <p>Thank you for your booking. Your reservation for the event below has been successfully confirmed:</p>
+
+                <ul>
+                  <li><strong>Date:</strong> {eventEntity.StartDate:dddd, MMMM d, yyyy}</li>
+                  <li><strong>Time:</strong> {eventEntity.StartTime:h:mm} - {eventEntity.EndTime:h:mm}</li>
+                  <li><strong>Location:</strong> {eventEntity.Location?.Name ?? "TBA"}, {eventEntity.Address ?? "No address provided"}</li>
+                  <li><strong>Seat Number:</strong> {dto.SeatNumber}</li>
+                  <li><strong>Session Type:</strong> {eventEntity.SessionType}</li>
+                </ul>
+
+                <p>A QR code for entry is now linked to your booking. You can access it in the app to present it at the event entrance for checking in and out of the event.</p>
+
+                <p>We look forward to seeing you there!</p>
+
+                <p>Warm regards,<br />
+                The Your Corps Team</p>
+                ";
+
+            await _emailService.SendEmailAsync(
+                user.Email!,
+                "Booking Confirmation",
+                emailBody
+            );
 
             return Ok(new { message = "Booking created successfully", booking.BookingId });
         }
