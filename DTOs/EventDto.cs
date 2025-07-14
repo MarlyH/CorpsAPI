@@ -91,13 +91,6 @@ namespace CorpsAPI.DTOs
         public string? CancellationMessage { get; set; }
     }
 
-    public class LocationDto
-    {
-        public int LocationId { get; set; }
-        public string Name { get; set; } = default!;
-        public string? MascotImgSrc { get; set; }
-    }
-
     public class GetWaitlistDto
     {
         public GetWaitlistDto(Waitlist waitlist)
