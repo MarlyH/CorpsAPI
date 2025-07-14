@@ -136,11 +136,18 @@ namespace CorpsAPI.Controllers
                 The Your Corps Team</p>
                 ";
 
-            await _emailService.SendEmailAsync(
-                user.Email!,
-                "Booking Confirmation",
-                emailBody
-            );
+            // send email in background so we don't slow down the response
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _emailService.SendEmailAsync(user.Email!, "Booking Confirmation", emailBody);
+                }
+                catch 
+                { 
+                    // TODO: implement logging
+                }
+            });
 
             return Ok(new { message = "Booking created successfully", booking.BookingId });
         }
