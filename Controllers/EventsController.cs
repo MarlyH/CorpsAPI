@@ -33,7 +33,7 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> GetEvents()
         {
             var events = await _context.Events
-                .Where(e => !e.IsCancelled)
+                .Where(e => e.Status == EventStatus.Available)
                 .Include(e => e.Location)
                 .Include(e => e.Bookings)
                 .ToListAsync();
@@ -50,7 +50,7 @@ namespace CorpsAPI.Controllers
             var ev = await _context.Events
                 .Include(e => e.Location)
                 .Include(e => e.Bookings)
-                .FirstOrDefaultAsync(e => e.EventId == id && !e.IsCancelled);
+                .FirstOrDefaultAsync(e => e.EventId == id && e.Status == EventStatus.Available);
 
             if (ev == null)
                 return NotFound(new { message = ErrorMessages.EventNotFound });
@@ -86,16 +86,22 @@ namespace CorpsAPI.Controllers
             if (dto.AvailableDate > dto.StartDate)
                 return BadRequest(new { message = ErrorMessages.EventNotAvailable });
 
-            // upload the seating map image
-            string imageUrl;
-            try
+            string? imageUrl = null;
+            if (dto.SeatingMapImage != null)
             {
-                imageUrl = await _azureStorageService.UploadImageAsync(dto.SeatingMapImage);
+                // upload the seating map image
+                try
+                {
+                    imageUrl = await _azureStorageService.UploadImageAsync(dto.SeatingMapImage);
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { message = "Image upload failed", detail = ex.Message });
+                }
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Image upload failed", detail = ex.Message });
-            }
+            
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var eventStatus = dto.AvailableDate <= today ? EventStatus.Available : EventStatus.Unavailable;
 
             var newEvent = new Event
             {
@@ -109,7 +115,8 @@ namespace CorpsAPI.Controllers
                 SeatingMapImgSrc = imageUrl,
                 TotalSeats = dto.TotalSeats,
                 Description = dto.Description,
-                Address = dto.Address
+                Address = dto.Address,
+                Status = eventStatus
             };
 
             _context.Events.Add(newEvent);
@@ -122,7 +129,7 @@ namespace CorpsAPI.Controllers
         [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
         public async Task<IActionResult> CancelEvent(int id, [FromBody] CancelEventRequestDto dto, [FromServices] EmailService emailService)
         {
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
@@ -162,7 +169,7 @@ namespace CorpsAPI.Controllers
                 }
             }
 
-            ev.IsCancelled = true;
+            ev.Status = EventStatus.Cancelled;
             await _context.SaveChangesAsync();
 
             return Ok(new { message = SuccessMessages.EventCancelSuccessful });

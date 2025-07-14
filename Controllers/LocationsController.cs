@@ -45,7 +45,7 @@ namespace CorpsAPI.Controllers
                 .FirstOrDefaultAsync();
 
             if (location == null)
-                return NotFound();
+                return NotFound(new { message = "The specified location does not exist." });
 
             var dto = new GetLocationDto(location);
 

@@ -4,6 +4,7 @@ using CorpsAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CorpsAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250714075236_AddEventStatus")]
+    partial class AddEventStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -143,7 +146,7 @@ namespace CorpsAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Bookings", (string)null);
+                    b.ToTable("Bookings");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.Child", b =>
@@ -184,7 +187,7 @@ namespace CorpsAPI.Migrations
 
                     b.HasIndex("ParentUserId");
 
-                    b.ToTable("Children", (string)null);
+                    b.ToTable("Children");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.Event", b =>
@@ -216,6 +219,7 @@ namespace CorpsAPI.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("SeatingMapImgSrc")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("SessionType")
@@ -239,7 +243,7 @@ namespace CorpsAPI.Migrations
 
                     b.HasIndex("LocationId");
 
-                    b.ToTable("Events", (string)null);
+                    b.ToTable("Events");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.Location", b =>
@@ -260,7 +264,7 @@ namespace CorpsAPI.Migrations
 
                     b.HasKey("LocationId");
 
-                    b.ToTable("Locations", (string)null);
+                    b.ToTable("Locations");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.UserDeviceToken", b =>
@@ -277,7 +281,7 @@ namespace CorpsAPI.Migrations
 
                     b.HasKey("UserId", "Token");
 
-                    b.ToTable("UserDeviceTokens", (string)null);
+                    b.ToTable("UserDeviceTokens");
                 });
 
             modelBuilder.Entity("CorpsAPI.Models.Waitlist", b =>
@@ -292,7 +296,7 @@ namespace CorpsAPI.Migrations
 
                     b.HasIndex("EventId");
 
-                    b.ToTable("Waitlists", (string)null);
+                    b.ToTable("Waitlists");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>

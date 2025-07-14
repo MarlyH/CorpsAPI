@@ -24,7 +24,7 @@ namespace CorpsAPI.Models
         public TimeOnly EndTime { get; set; }
         [Required]
         public DateOnly AvailableDate { get; set; }
-        public string SeatingMapImgSrc { get; set; } = default!;
+        public string? SeatingMapImgSrc { get; set; }
         public int TotalSeats { get; set; }
         public List<Booking> Bookings { get; set; } = new();
         public List<Waitlist> Waitlists { get; set; } = new();
@@ -34,9 +34,10 @@ namespace CorpsAPI.Models
         public string? Description { get; set; }
         [MaxLength(100)]
         public string? Address { get; set; }
+        [Required]
+        public EventStatus Status { get; set; }
         [NotMapped]
         public int AttendanceCount { get { return Bookings?.Count(b => b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut) ?? 0; } }
-        public bool IsCancelled { get; set; } = false;
     }
 
     public enum EventSessionType
@@ -44,5 +45,22 @@ namespace CorpsAPI.Models
         Kids,
         Teens,
         Adults
+    }
+
+    public enum EventStatus
+    {
+        // The event is not yet available for booking. 
+        // It will be updated to 'Available' by a nightly Azure Function based on the 'AvailableDate' field.
+        Unavailable,
+
+        // The event is open for booking. 
+        // It will be updated to 'Concluded' by a nightly Azure Function once the event's StartDate and EndTime have passed.
+        Available,
+
+        // The event has already taken place.
+        Concluded,
+
+        // The event has been cancelled manually and will not proceed.
+        Cancelled
     }
 }

@@ -40,8 +40,8 @@ namespace CorpsAPI.Controllers
                 .Include(e => e.Location)
                 .FirstOrDefaultAsync(e => e.EventId == dto.EventId);
 
-            if (eventEntity == null)
-                return NotFound(new { message = "Event not found." });
+            if (eventEntity == null || eventEntity.Status != EventStatus.Available)
+                return NotFound(new { message = "Event not found or not available for booking." });
 
             if (eventEntity.Bookings.Any(b => b.SeatNumber == dto.SeatNumber))
                 return BadRequest(new { message = "That seat is already taken." });
@@ -189,9 +189,13 @@ namespace CorpsAPI.Controllers
             if (booking == null || booking.UserId != userId)
                 return NotFound(new { message = "Booking not found." });
 
+            var ev = booking.Event!;
+
+            if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
+                return BadRequest(new { message = "You cannot cancel a booking after the event has concluded." });
+
             // get available seats before we actually cancel booking.
             // This way we can check if the event was full.
-            var ev = booking.Event!;
             bool wasFull = ev.AvailableSeats <= 0;
 
             booking.Status = BookingStatus.Cancelled;

@@ -29,7 +29,7 @@
 
         // event errors
         public const string EventCancelUnauthorised = "Only the event manager or an admin can cancel the event.";
-        public const string EventNotFound = "An event with this ID does not exist or has been cancelled.";
+        public const string EventNotFound = "An event with this ID does not exist or is unavailable.";
         public const string EventNotAvailable = "The event must be available before it starts.";
 
         // waitlist errors

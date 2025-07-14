@@ -16,7 +16,7 @@ namespace CorpsAPI.DTOs
         public string? Description { get; set; }
         [MaxLength(100)]
         public string? Address { get; set; }
-        public IFormFile SeatingMapImage { get; set; } = default!;
+        public IFormFile? SeatingMapImage { get; set; } = default!;
     }
 
     public class GetAllEventsDto
@@ -27,7 +27,6 @@ namespace CorpsAPI.DTOs
             LocationName = e.Location!.Name;
             SessionType = e.SessionType;
             StartDate = e.StartDate;
-            AvailableDate = e.AvailableDate;
             StartTime = e.StartTime;
             EndTime = e.EndTime;
             Description = e.Description;
@@ -38,7 +37,6 @@ namespace CorpsAPI.DTOs
         public string LocationName { get; set; } = default!;
         public EventSessionType SessionType { get; set; }
         public DateOnly StartDate { get; set; }
-        public DateOnly AvailableDate { get; set; }
         public TimeOnly StartTime { get; set; }
         public TimeOnly EndTime { get; set; }
         public string? Description { get; set; }
@@ -54,7 +52,6 @@ namespace CorpsAPI.DTOs
             LocationName = e.Location!.Name;
             SessionType = e.SessionType;
             StartDate = e.StartDate;
-            AvailableDate = e.AvailableDate;
             StartTime = e.StartTime;
             EndTime = e.EndTime;
             Description = e.Description;
@@ -75,7 +72,6 @@ namespace CorpsAPI.DTOs
         public string LocationName { get; set; } = default!;
         public EventSessionType SessionType { get; set; }
         public DateOnly StartDate { get; set; }
-        public DateOnly AvailableDate { get; set; }
         public TimeOnly StartTime { get; set; }
         public TimeOnly EndTime { get; set; }
         public string? Description { get; set; }
@@ -83,7 +79,7 @@ namespace CorpsAPI.DTOs
         public int TotalSeatsCount { get; set; }
         public int AvailbleSeatsCount { get; set; }
         public List<int> AvailableSeats { get; set; } = new();
-        public string SeatingMapImgSrc { get; set; } = default!;
+        public string? SeatingMapImgSrc { get; set; }
     }
 
     public class CancelEventRequestDto
