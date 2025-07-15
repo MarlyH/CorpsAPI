@@ -78,7 +78,8 @@ namespace CorpsAPI.Controllers
             // Generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
-            var confirmationUrl = $"{ServerUrl.serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+            var serverUrl = _configuration["ServerUrl"];
+            var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // Send email
             await _emailService.SendEmailAsync(user.Email, "Verify your email", 
@@ -217,7 +218,8 @@ namespace CorpsAPI.Controllers
             // generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
-            var confirmationUrl = $"{ServerUrl.serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
+            var serverUrl = _configuration["ServerUrl"];
+            var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // send email
             await _emailService.SendEmailAsync(user.Email, "Verify your email",

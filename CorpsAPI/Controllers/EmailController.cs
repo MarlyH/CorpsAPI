@@ -16,11 +16,13 @@ namespace CorpsAPI.Controllers
     {
         private readonly EmailService _emailService;
         private readonly UserManager<AppUser> _userManager;
+        private readonly IConfiguration _configuration;
 
-        public EmailController(EmailService emailService, UserManager<AppUser> userManager)
+        public EmailController(EmailService emailService, UserManager<AppUser> userManager, IConfiguration configuration)
         {
             _emailService = emailService;
             _userManager = userManager;
+            _configuration = configuration;
         }
 
         [Authorize]
@@ -39,7 +41,8 @@ namespace CorpsAPI.Controllers
             var token = await _userManager.GenerateChangeEmailTokenAsync(user, dto.NewEmail);
             var encodedToken = WebUtility.UrlEncode(token);
 
-            var url = $"{ServerUrl.serverUrl}/api/email/confirm-email-change?userId={user.Id}&newEmail={dto.NewEmail}&token={encodedToken}";
+            var serverUrl = _configuration["ServerUrl"];
+            var url = $"{serverUrl}/api/email/confirm-email-change?userId={user.Id}&newEmail={dto.NewEmail}&token={encodedToken}";
             await _emailService.SendEmailAsync(dto.NewEmail, "Confirm Email Change", $"<a href='{url}'>Click here to confirm</a>");
 
             return Ok(new { message = SuccessMessages.ChangeEmailRequest });
