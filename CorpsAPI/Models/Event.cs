@@ -37,6 +37,8 @@ namespace CorpsAPI.Models
         public string? Address { get; set; }
         [Required]
         public EventStatus Status { get; set; }
+        [Required]
+        public bool IsReminded { get; set; } = false;
         [NotMapped]
         public int AttendanceCount { get { return Bookings?.Count(b => b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut) ?? 0; } }
     }
