@@ -25,6 +25,7 @@ namespace CorpsAPI.Models
         [Required]
         public DateOnly AvailableDate { get; set; }
         public string? SeatingMapImgSrc { get; set; }
+        [Required]
         public int TotalSeats { get; set; }
         public List<Booking> Bookings { get; set; } = new();
         public List<Waitlist> Waitlists { get; set; } = new();

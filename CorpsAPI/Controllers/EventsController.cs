@@ -100,7 +100,7 @@ namespace CorpsAPI.Controllers
                 }
             }
             
-            var today = DateOnly.FromDateTime(DateTime.Now);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
             var eventStatus = dto.AvailableDate <= today ? EventStatus.Available : EventStatus.Unavailable;
 
             var newEvent = new Event
