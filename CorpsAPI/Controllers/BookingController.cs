@@ -155,27 +155,31 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> GetMyBookings()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null)
-                return Unauthorized();
 
             var bookings = await _context.Bookings
                 .Include(b => b.Event)
-                .Where(b => b.UserId == userId)
-                .Select(b => new BookingResponseDto
-                {
-                    BookingId = b.BookingId,
-                    EventId = b.EventId,
-                    EventName = b.Event!.Location!.Name,
-                    EventDate = b.Event.StartDate,
-                    SeatNumber = b.SeatNumber,
-                    Status = b.Status,
+                .Include(b => b.Child)   // for child bookings
+                .Include(b => b.User)    // for adult bookings
+                .Where(b => b.UserId == userId || (b.Child != null && b.UserId == userId))
+                .Select(b => new BookingResponseDto {
+                    BookingId    = b.BookingId,
+                    EventId      = b.EventId,
+                    EventName    = b.Event.Location!.Name,
+                    EventDate    = b.Event.StartDate,
+                    SeatNumber   = b.SeatNumber,
+                    Status       = b.Status,
                     CanBeLeftAlone = b.CanBeLeftAlone,
-                    QrCodeData = b.QrCodeData
+                    QrCodeData   = b.QrCodeData,
+                    AttendeeName = b.IsForChild
+                        ? $"{b.Child!.FirstName} {b.Child!.LastName}"
+                        : $"{b.User!.FirstName} {b.User!.LastName}"
                 })
                 .ToListAsync();
 
             return Ok(bookings);
         }
+
+
 
         [HttpPut("cancel/{id}")]
         [Authorize]

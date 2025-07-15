@@ -16,6 +16,7 @@ namespace CorpsAPI.DTOs
         public int BookingId { get; set; }
         public int EventId { get; set; }
         public string EventName { get; set; } = default!;
+        public string AttendeeName { get; set; } = default!;  // ← new
         public DateOnly EventDate { get; set; }
         public int? SeatNumber { get; set; }
         public BookingStatus Status { get; set; }
