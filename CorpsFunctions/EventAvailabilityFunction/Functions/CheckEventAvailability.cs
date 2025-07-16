@@ -20,7 +20,7 @@ public class CheckEventAvailability
     }
 
     [Function("CheckEventAvailability")]
-    public async Task Run([TimerTrigger("0 */1 * * * *")] TimerInfo timer)  // run every minute for testing // runs at midnight UTC [TimerTrigger("0 0 0 * * *")]
+    public async Task Run([TimerTrigger("0 0 0 * * *")] TimerInfo timer)  // run every minute for testing // runs at midnight UTC [TimerTrigger("0 */1 * * * *")]
     {
         _logger.LogInformation($"Check Event Availability Function started at: {DateTime.UtcNow}");
 

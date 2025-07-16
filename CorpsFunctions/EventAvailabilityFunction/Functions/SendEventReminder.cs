@@ -20,7 +20,7 @@ public class SendEventReminder
     }
 
     [Function("SendEventReminder")]
-    public async Task Run([TimerTrigger("0 */1 * * * *")] TimerInfo timer)  // run every minute for testing // runs at midnight UTC [TimerTrigger("0 0 0 * * *")]
+    public async Task Run([TimerTrigger("0 0 0 * * *")] TimerInfo timer)  // run every minute for testing // runs at midnight UTC [TimerTrigger("0 0 0 * * *")]
     {
         _logger.LogInformation($"Event Reminder Function started at: {DateTime.Now}");
 
