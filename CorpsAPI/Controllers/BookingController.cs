@@ -162,14 +162,14 @@ namespace CorpsAPI.Controllers
                 .Include(b => b.User)    // for adult bookings
                 .Where(b => b.UserId == userId || (b.Child != null && b.UserId == userId))
                 .Select(b => new BookingResponseDto {
-                    BookingId    = b.BookingId,
-                    EventId      = b.EventId,
-                    EventName    = b.Event.Location!.Name,
-                    EventDate    = b.Event.StartDate,
-                    SeatNumber   = b.SeatNumber,
-                    Status       = b.Status,
+                    BookingId = b.BookingId,
+                    EventId = b.EventId,
+                    EventName = b.Event.Location!.Name,
+                    EventDate = b.Event.StartDate,
+                    SeatNumber = b.SeatNumber,
+                    Status = b.Status,
                     CanBeLeftAlone = b.CanBeLeftAlone,
-                    QrCodeData   = b.QrCodeData,
+                    QrCodeData = b.QrCodeData,
                     AttendeeName = b.IsForChild
                         ? $"{b.Child!.FirstName} {b.Child!.LastName}"
                         : $"{b.User!.FirstName} {b.User!.LastName}"

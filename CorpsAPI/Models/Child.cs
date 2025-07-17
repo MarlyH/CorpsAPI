@@ -37,6 +37,8 @@ namespace CorpsAPI.Models
         public string ParentUserId { get; set; } = default!;
         public AppUser ParentUser { get; set; } = default!;
 
+        public List<Booking> Bookings { get; set; } = new();
+
         [NotMapped]
         public int Age
         {
