@@ -48,9 +48,9 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> GetEvent(int id)
         {
             var ev = await _context.Events
-                .Include(e => e.Location)
-                .Include(e => e.Bookings)
-                .FirstOrDefaultAsync(e => e.EventId == id && e.Status == EventStatus.Available);
+            .Include(e => e.Location)
+            .Include(e => e.Bookings)
+            .FirstOrDefaultAsync(e => e.EventId == id);
 
             if (ev == null)
                 return NotFound(new { message = ErrorMessages.EventNotFound });
