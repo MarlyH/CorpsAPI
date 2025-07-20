@@ -267,5 +267,51 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = $"Booking status updated."  });
         }
-    }     
+
+        [HttpPost("reserve")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> ReserveSeat([FromBody] ReserveSeatDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return Unauthorized();
+
+            var eventEntity = await _context.Events
+                .Include(e => e.Bookings)
+                .FirstOrDefaultAsync(e => e.EventId == dto.EventId);
+
+            if (eventEntity == null || eventEntity.Status != EventStatus.Available)
+                return NotFound(new { message = "Event not found or not available." });
+
+            // event managers can only make reservations for their event but admins can do so for any event.
+            var userRoles = await _userManager.GetRolesAsync(user);
+            if (!userRoles.Contains(Roles.Admin) && eventEntity.EventManagerId != user.Id)
+                return Forbid();
+
+            if (eventEntity.Bookings.Any(b => b.SeatNumber == dto.SeatNumber && b.Status != BookingStatus.Cancelled))
+                return BadRequest(new { message = "Seat already taken." });
+
+            if (dto.SeatNumber < 1 || dto.SeatNumber > eventEntity.TotalSeats)
+                return BadRequest(new { message = "Seat number out of range." });
+
+            if (eventEntity.AvailableSeats <= 0)
+                return BadRequest(new { message = "No seats available." });
+
+            var booking = new Booking
+            {
+                EventId = dto.EventId,
+                UserId = user.Id,
+                SeatNumber = dto.SeatNumber,
+                Status = BookingStatus.Booked,
+                QrCodeData = Guid.NewGuid().ToString(),
+                ReservedBookingAttendeeName = dto.AttendeeName,
+                IsForChild = false
+            };
+
+            _context.Bookings.Add(booking);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Seat reserved successfully." });
+        }
+    }
 }

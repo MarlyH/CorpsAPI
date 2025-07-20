@@ -28,4 +28,11 @@ namespace CorpsAPI.DTOs
     {
         public string QrCodeData { get; set; } = default!;
     }
+
+    public class ReserveSeatDto
+    {
+        public int EventId { get; set; }
+        public int SeatNumber { get; set; }
+        public string? AttendeeName { get; set; } = null;
+    }
 }

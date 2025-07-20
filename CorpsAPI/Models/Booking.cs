@@ -21,6 +21,7 @@ namespace CorpsAPI.Models
         public int? ChildId { get; set; } // not all bookings will be for a child
         [ForeignKey("ChildId")]
         public Child? Child { get; set; }
+        public string? ReservedBookingAttendeeName { get; set; } = null;
     }
 
     public enum BookingStatus
