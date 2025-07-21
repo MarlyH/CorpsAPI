@@ -54,7 +54,7 @@ namespace CorpsAPI.Services
                 signingCredentials: credentials
             );
 
-            _memoryCache.Set(jti, user.Id, TimeSpan.FromDays(7));
+            //_memoryCache.Set(jti, user.Id, TimeSpan.FromDays(7));
 
             return new JwtSecurityTokenHandler().WriteToken(refreshToken);
         }

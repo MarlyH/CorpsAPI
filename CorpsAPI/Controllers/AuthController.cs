@@ -273,7 +273,7 @@ namespace CorpsAPI.Controllers
                 // extract the sub claim (userId). Claim comes through as NameIdentifier so can't retrieve it normally like literally every other claim in the payload
                 var userIdToken = principalClaims.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-                // check token is in memory.
+                /*// check token is in memory.
                 if (!_memoryCache.TryGetValue(jti, out string? userIdMemory))
                     return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
@@ -282,7 +282,7 @@ namespace CorpsAPI.Controllers
                     return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
                 // and finally remove old token from memory
-                _memoryCache.Remove(jti);
+                _memoryCache.Remove(jti);*/
 
                 // build out credentials for signing new token
                 var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
