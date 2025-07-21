@@ -142,7 +142,7 @@ namespace CorpsAPI.Controllers
                 return NotFound(new { message = ErrorMessages.InvalidRequest });
 
             // Only the manager for the particular event or an admin should be able to cancel
-            if (ev.EventManagerId != userId && !User.IsInRole(Roles.Admin))
+            if (ev.EventManagerId != userId || !User.IsInRole(Roles.Admin))
                 return BadRequest(new { message = ErrorMessages.EventCancelUnauthorised});
 
             // Cancel all associated bookings that aren't already cancelled
