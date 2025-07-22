@@ -31,7 +31,16 @@ namespace CorpsAPI.DTOs
             EndTime = e.EndTime;
             Description = e.Description;
             Address = e.Address;
+            TotalSeatsCount = e.TotalSeats;
             AvailbleSeatsCount = e.AvailableSeats;
+
+            // Get available seat numbers
+            var bookedSeats = e.Bookings?.Select(b => b.SeatNumber).ToHashSet() ?? new HashSet<int?>();
+            for (int i = 1; i <= e.TotalSeats; i++)
+            {
+                if (!bookedSeats.Contains(i))
+                    AvailableSeats.Add(i);
+            }
         }
         public int EventId { get; set; }
         public string LocationName { get; set; } = default!;
@@ -41,7 +50,9 @@ namespace CorpsAPI.DTOs
         public TimeOnly EndTime { get; set; }
         public string? Description { get; set; }
         public string? Address { get; set; }
+        public int TotalSeatsCount { get; set; }
         public int AvailbleSeatsCount { get; set; }
+        public List<int> AvailableSeats { get; set; } = new();
     }
 
     public class GetEventDto
