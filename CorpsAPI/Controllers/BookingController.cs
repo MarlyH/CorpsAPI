@@ -285,7 +285,7 @@ namespace CorpsAPI.Controllers
 
             // event managers can only make reservations for their event but admins can do so for any event.
             var userRoles = await _userManager.GetRolesAsync(user);
-            if (!userRoles.Contains(Roles.Admin) && eventEntity.EventManagerId != user.Id)
+            if (!userRoles.Contains(Roles.Admin) || eventEntity.EventManagerId != user.Id)
                 return Forbid();
 
             if (eventEntity.Bookings.Any(b => b.SeatNumber == dto.SeatNumber && b.Status != BookingStatus.Cancelled))
