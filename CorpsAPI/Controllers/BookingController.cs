@@ -43,10 +43,15 @@ namespace CorpsAPI.Controllers
             if (eventEntity == null || eventEntity.Status != EventStatus.Available)
                 return NotFound(new { message = "Event not found or not available for booking." });
 
-            if (eventEntity.Bookings.Any(b => b.SeatNumber == dto.SeatNumber))
+            // only treat seats on non‑cancelled bookings as “taken”
+            if (eventEntity.Bookings.Any(b =>
+                    b.SeatNumber == dto.SeatNumber
+                && b.Status     != BookingStatus.Cancelled))
+            {
                 return BadRequest(new { message = "That seat is already taken." });
+            }
 
-            if(dto.SeatNumber > eventEntity.TotalSeats || dto.SeatNumber < 1)
+            if (dto.SeatNumber < 1 || dto.SeatNumber > eventEntity.TotalSeats)
                 return BadRequest(new { message = "Seat out of bounds." });
 
             if (eventEntity.AvailableSeats <= 0)
@@ -55,19 +60,30 @@ namespace CorpsAPI.Controllers
             int bookingAge;
             if (dto.IsForChild)
             {
-                if (eventEntity.Bookings.Any(b => b.ChildId == dto.ChildId && b.Status != BookingStatus.Cancelled))
+                // only block children with *active* bookings
+                if (eventEntity.Bookings.Any(b =>
+                        b.ChildId == dto.ChildId
+                    && b.Status  != BookingStatus.Cancelled))
+                {
                     return BadRequest(new { message = "This child already has a booking for this event." });
+                }
 
                 var child = await _context.Children.FindAsync(dto.ChildId);
                 if (child == null)
                     return BadRequest(new { message = "Booking is for child but child ID not found." });
-                
+
                 bookingAge = child.Age;
             }
             else
             {
-                if (eventEntity.Bookings.Any(b => b.UserId == user.Id))
-                    return BadRequest(new { message = "You already have a booking for this event." });
+                // only block users with *active* bookings
+                if (eventEntity.Bookings.Any(b =>
+                        b.UserId == user.Id
+                    && b.Status != BookingStatus.Cancelled))
+                {
+                    return BadRequest(new { message = "You already have an active booking for this event." });
+                }
+
                 bookingAge = user.Age;
             }
 
