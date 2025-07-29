@@ -23,13 +23,16 @@ namespace CorpsAPI.DTOs
     {
         public GetAllLocationsDto(Location location)
         {
-            LocationId = location.LocationId;
-            Name       = location.Name;
+            LocationId    = location.LocationId;
+            Name          = location.Name;
+            MascotImgSrc  = location.MascotImgSrc;
         }
 
-        public int    LocationId { get; set; }
-        public string Name       { get; set; } = default!;
+        public int LocationId     { get; set; }
+        public string Name        { get; set; } = default!;
+        public string? MascotImgSrc { get; set; }
     }
+
 
     public class CreateLocationDto
     {

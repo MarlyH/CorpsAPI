@@ -33,6 +33,7 @@ namespace CorpsAPI.DTOs
             Address = e.Address;
             TotalSeatsCount = e.TotalSeats;
             AvailbleSeatsCount = e.AvailableSeats;
+            MascotImgSrc = e.Location.MascotImgSrc;
 
             // Get available seat numbers
             var bookedSeats = e.Bookings?.Select(b => b.SeatNumber).ToHashSet() ?? new HashSet<int?>();
@@ -53,6 +54,7 @@ namespace CorpsAPI.DTOs
         public int TotalSeatsCount { get; set; }
         public int AvailbleSeatsCount { get; set; }
         public List<int> AvailableSeats { get; set; } = new();
+        public string? MascotImgSrc      { get; set; }
     }
 
     public class GetEventDto
@@ -70,7 +72,7 @@ namespace CorpsAPI.DTOs
             TotalSeatsCount = e.TotalSeats;
             AvailbleSeatsCount = e.AvailableSeats;
             SeatingMapImgSrc = e.SeatingMapImgSrc;
-
+            
             // Get available seat numbers
             var bookedSeats = e.Bookings?.Select(b => b.SeatNumber).ToHashSet() ?? new HashSet<int?>();
             for (int i = 1; i <= e.TotalSeats; i++)
