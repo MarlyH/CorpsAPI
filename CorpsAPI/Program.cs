@@ -4,7 +4,9 @@ using CorpsAPI.Models;
 using CorpsAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Azure.NotificationHubs;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Configuration;
@@ -66,6 +68,9 @@ namespace CorpsAPI
 
             // register memory cache for pswd reset OTPs
             builder.Services.AddMemoryCache();
+
+            // register Azure notification hub service
+            builder.Services.AddScoped<NotificationService>();
 
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();

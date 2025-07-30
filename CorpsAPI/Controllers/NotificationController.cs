@@ -1,11 +1,13 @@
-﻿using System.Security.Claims;
-using CorpsAPI.Constants;
+﻿using CorpsAPI.Constants;
 using CorpsAPI.Data;
 using CorpsAPI.DTOs;
 using CorpsAPI.Models;
+using CorpsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.NotificationHubs;
+using System.Security.Claims;
 
 namespace CorpsAPI.Controllers
 {
@@ -14,8 +16,12 @@ namespace CorpsAPI.Controllers
     public class NotificationController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public NotificationController(AppDbContext context) {
+        private readonly NotificationService _notificationService;
+
+        public NotificationController(AppDbContext context, NotificationService notificationService)
+        {
             _context = context;
+            _notificationService = notificationService;
         }
 
         [HttpPost]
@@ -37,18 +43,48 @@ namespace CorpsAPI.Controllers
                 return BadRequest(new { message = errors });
             }
 
-            var token = new UserDeviceToken
-            {
-                UserId = userId,
-                Token = dto.DeviceToken,
-                Platform = dto.Platform,
-            };
-
-            _context.UserDeviceTokens.Add(token);
-            await _context.SaveChangesAsync();
+            await _notificationService.RegisterDeviceAsync(dto.DeviceToken, dto.Platform, userId);
 
             return Ok(new { message = SuccessMessages.DeviceTokenCreateSuccessful });
         }
 
+        /*[HttpPost("send-test")]
+        [Authorize]
+        public async Task<IActionResult> SendTestNotificationFcmv1()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "Invalid user" });
+
+            try
+            {
+                await _notificationService.SendFcmV1NotificationAsync(userId, "Test Notification", "If you see this, push is working.");
+                return Ok(new { message = "Notification sent" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"Failed to send test notification: {ex.Message}" });
+            }
+        }*/
+
+        // TODO: remove this at some point
+        [HttpPost("send-test-generic")]
+        [Authorize]
+        public async Task<IActionResult> SendTestNotificationGeneric()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "Invalid user" });
+
+            try
+            {
+                await _notificationService.SendCrossPlatformNotificationAsync(userId, "Cross Platform Test Notification", "If you see this, push is working.");
+                return Ok(new { message = "Notification sent" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"Failed to send test notification: {ex.Message}" });
+            }
+        }
     }
 }
