@@ -20,7 +20,7 @@ public class SendEventReminder
     }
 
     [Function("SendEventReminder")]
-    public async Task Run([TimerTrigger("0 0 0 * * *")] TimerInfo timer)  // run every minute for testing // runs at midnight UTC [TimerTrigger("0 0 0 * * *")]
+    public async Task Run([TimerTrigger("0 */30 * * * *")] TimerInfo timer) // run every 30mins
     {
         _logger.LogInformation($"Event Reminder Function started at: {DateTime.Now}");
 
@@ -34,7 +34,6 @@ public class SendEventReminder
         var now = TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, nzTimeZone));
 
         // get e where startdate == today and (starttime > now && starttime < now +2hrs)
-        // run every 30mins?
         var eventsToRemind = await context.Events
             .Where(e => e.StartDate == today 
                 && e.IsReminded == false

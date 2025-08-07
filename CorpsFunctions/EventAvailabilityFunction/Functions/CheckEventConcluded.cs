@@ -17,7 +17,7 @@ public class CheckEventConcluded
     }
 
     [Function("CheckEventConcluded")]
-    public async Task Run([TimerTrigger("0 0 0 * * *")] TimerInfo timer)  // run every minute for testing // runs at midnight UTC [TimerTrigger("0 */1 * * * *")]
+    public async Task Run([TimerTrigger("0 0 11 * * *")] TimerInfo timer)  // run at midnight NZD = 11:00 UTC
     {
         _logger.LogInformation($"Check Event Concluded Function started at: {DateTime.Now}");
 
