@@ -202,7 +202,10 @@ namespace CorpsAPI.Controllers
             if (alreadyExists)
                 return BadRequest(new { message = ErrorMessages.AlreadyOnWaitlist });
 
-            var ev = await _context.Events.FindAsync(eventId);
+            var ev = await _context.Events
+                .Include(e => e.Bookings)
+                .FirstOrDefaultAsync(e => e.EventId == eventId);
+
             if (ev == null)
                 return NotFound(new { message = ErrorMessages.EventNotFound });
 

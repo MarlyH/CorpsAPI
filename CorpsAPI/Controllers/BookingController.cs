@@ -19,12 +19,14 @@ namespace CorpsAPI.Controllers
         private readonly AppDbContext _context;
         private readonly UserManager<AppUser> _userManager;
         private readonly EmailService _emailService;
+        private readonly NotificationService _notificationService;
 
-        public BookingController(AppDbContext context, UserManager<AppUser> userManager, EmailService emailService)
+        public BookingController(AppDbContext context, UserManager<AppUser> userManager, EmailService emailService, NotificationService notificationService)
         {
             _context = context;
             _userManager = userManager;
             _emailService = emailService;
+            _notificationService = notificationService;
         }
 
         [HttpPost]
@@ -195,8 +197,6 @@ namespace CorpsAPI.Controllers
             return Ok(bookings);
         }
 
-
-
         [HttpPut("cancel/{id}")]
         [Authorize]
         public async Task<IActionResult> CancelBooking(int id, [FromServices] EmailService emailService)
@@ -224,7 +224,7 @@ namespace CorpsAPI.Controllers
 
             if (wasFull)
             {
-                // send email to anybody on waitlist
+                // send notification to anybody on waitlist
 
                 var waitlistEntries = await _context.Waitlists
                     .Where(w => w.EventId == ev.EventId)
@@ -234,15 +234,10 @@ namespace CorpsAPI.Controllers
                 foreach (var entry in waitlistEntries)
                 {
                     var user = entry.User!;
-                    var emailBody = $@"
-                            <p>Dear {user.UserName},</p>
-                            <p>A seat has been made available for the event on <strong>{ev.StartDate}</strong> at <strong>{ev.StartTime}</strong>.</p>";
-
-                    await emailService.SendEmailAsync(
-                        user.Email!,
-                        "Seat Available: Event Notification",
-                        emailBody
-                    );
+                    await _notificationService.SendCrossPlatformNotificationAsync(
+                        user.Id, 
+                        "Seat Available!",
+                        "A spot just opened up for an event you're interested in. Book now before it's gone!");
 
                     // now mark waitlist entity for deletion
                     _context.Remove(entry);
