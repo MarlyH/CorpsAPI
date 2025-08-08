@@ -41,18 +41,13 @@ public class SendEventReminder
                 && e.StartTime > now
                 && e.StartTime <= now.AddHours(2))
             .Include(e => e.Bookings)
-                .ThenInclude(b => b.User)
             .ToListAsync();
-        _logger.LogInformation($"Checking for events between {now} and {now.AddHours(2)}");
-
-        var emailBody = $@"
-            <p>event beginning soon btw</p>";
+        _logger.LogInformation($"Checking for events starting on {today} between {now} and {now.AddHours(2)}");
 
         foreach (var ev in eventsToRemind)
         {
             foreach (var booking in ev.Bookings)
             {
-                var userEmail = booking.User!.Email!;
                 try
                 {
                     await _notificationService.SendCrossPlatformNotificationAsync(booking.UserId!, "event reminder", "test");

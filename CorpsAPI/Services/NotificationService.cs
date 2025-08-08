@@ -171,7 +171,7 @@ namespace CorpsAPI.Services
 
                 try
                 {
-                    await _hub.SendNotificationAsync(notification);
+                    await _hub.SendNotificationAsync(notification, $"user:{userId}");
                     Console.WriteLine($"Notification sent to {registration.GetType().Name} device for user {userId}");
                 }
                 catch (Exception ex)
