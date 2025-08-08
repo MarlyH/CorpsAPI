@@ -10,13 +10,13 @@ public class SendEventReminder
 {
     private readonly ILogger _logger;
     private readonly IConfiguration _configuration;
-    //private readonly EmailService _emailService;
+    private readonly NotificationService _notificationService;
 
-    public SendEventReminder(ILoggerFactory loggerFactory, IConfiguration configuration/*, EmailService emailService*/)
+    public SendEventReminder(ILoggerFactory loggerFactory, IConfiguration configuration, NotificationService notificationService /*, EmailService emailService*/ )
     {
         _logger = loggerFactory.CreateLogger<SendEventReminder>();
         _configuration = configuration;
-        //_emailService = emailService;
+        _notificationService = notificationService;
     }
 
     [Function("SendEventReminder")]
@@ -43,6 +43,7 @@ public class SendEventReminder
             .Include(e => e.Bookings)
                 .ThenInclude(b => b.User)
             .ToListAsync();
+        _logger.LogInformation($"Checking for events between {now} and {now.AddHours(2)}");
 
         var emailBody = $@"
             <p>event beginning soon btw</p>";
@@ -54,8 +55,7 @@ public class SendEventReminder
                 var userEmail = booking.User!.Email!;
                 try
                 {
-                    //await _emailService.SendEmailAsync(userEmail, "Reminder", emailBody);
-                    _logger.LogInformation($"Reminder email sent to '{userEmail}'");
+                    await _notificationService.SendCrossPlatformNotificationAsync(booking.UserId!, "event reminder", "test");
                 }
                 catch (Exception ex)
                 {
@@ -66,6 +66,6 @@ public class SendEventReminder
         }
 
         await context.SaveChangesAsync();
-        _logger.LogInformation($"{eventsToRemind.Count} events had reminder emails sent.");
+        _logger.LogInformation($"{eventsToRemind.Count} events had reminder notifications sent.");
     }
 }
