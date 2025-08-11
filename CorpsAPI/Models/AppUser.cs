@@ -13,7 +13,6 @@ namespace CorpsAPI.Models
         public List<Event> ManagedEvents { get; set; } = new();
         public List<Child> Children { get; set; } = new();
         public List<Waitlist> Waitlists { get; set; } = new();
-        public List<UserDeviceToken> UserDeviceTokens { get; set; } = new();
 
         [NotMapped]
         public int Age 
