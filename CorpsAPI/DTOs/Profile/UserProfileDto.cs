@@ -7,5 +7,7 @@
         public string LastName { get; set; } = default!;
         public string Email { get; set; } = default!;
         public int Age { get; set; }
+        public bool IsSuspended { get; set; } = false;
+        public int AttendanceStrikeCount { get; set; }
     }
 }

@@ -31,10 +31,29 @@ public class CheckEventConcluded
         
         var eventsToUpdate = await context.Events
             .Where(e => e.StartDate < today && e.Status == EventStatus.Available)
+            .Include(e => e.Bookings)
+                .ThenInclude(b => b.User)
             .ToListAsync();
 
         foreach (var ev in eventsToUpdate)
         {
+            // if a user hasn't been checked in, we can assume they haven't attended the event.
+            // Therefore, we strike their account. 
+            // If a user has multiple bookings for one event (multiple children),
+            // they only receive a single strike.
+            var unattendedBookings = ev.Bookings.Where(b => b.Status == BookingStatus.Booked);
+            var unattendedUsers = unattendedBookings
+                .Where(b => b.User != null)
+                .Select(b => b.User)
+                .DistinctBy(u => u!.Id);
+
+            foreach (var user in unattendedUsers)
+            {
+                user!.AttendanceStrikeCount++;
+                user.DateOfLastStrike = today;
+                //_logger.LogInformation($"User {user.UserName} received a strike. Strike count: {user.AttendanceStrikeCount}");
+            }
+
             ev.Status = EventStatus.Concluded;
         }
 

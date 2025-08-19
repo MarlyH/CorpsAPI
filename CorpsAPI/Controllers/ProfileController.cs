@@ -38,11 +38,13 @@ namespace CorpsAPI.Controllers
 
             var dto = new UserProfileDto
             {
-                UserName  = user.UserName!,
+                UserName = user.UserName!,
                 FirstName = user.FirstName,
-                LastName  = user.LastName,
-                Email     = user.Email!,
-                Age       = user.Age
+                LastName = user.LastName,
+                Email = user.Email!,
+                Age = user.Age,
+                IsSuspended = user.IsSuspended,
+                AttendanceStrikeCount = user.AttendanceStrikeCount
             };
             return Ok(dto);
         }
