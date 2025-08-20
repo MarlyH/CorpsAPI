@@ -22,7 +22,7 @@ namespace CorpsAPI.Models
             {
                 // once the user has been suspended, we reset their strike count after 90 days.
                 // strikes are NOT reset until a user gets suspended.
-                if (IsSuspended && DateOfLastStrike.HasValue)
+                if (AttendanceStrikeCount >= 3 && DateOfLastStrike.HasValue)
                 {
                     var daysSinceLastStrike = DateTime.Today - DateOfLastStrike.Value.ToDateTime(TimeOnly.MinValue);
                     if (daysSinceLastStrike.TotalDays > 90)
