@@ -29,6 +29,12 @@ namespace CorpsAPI.DTOs
         public string QrCodeData { get; set; } = default!;
     }
 
+    public class ManualStatusUpdateDto
+    {
+        public int BookingId { get; set; }
+        public BookingStatus NewStatus { get; set; }
+    }
+
     public class ReserveSeatDto
     {
         public int EventId { get; set; }

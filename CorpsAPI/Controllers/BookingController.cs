@@ -279,6 +279,37 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = $"Booking status updated."  });
         }
 
+        [HttpPost("manual-status")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> ManualStatusUpdate([FromBody] ManualStatusUpdateDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return Unauthorized();
+
+            var booking = await _context.Bookings
+                .Include(b => b.Event)
+                .FirstOrDefaultAsync(b => b.BookingId == dto.BookingId);
+
+            if (booking == null)
+                return NotFound(new { message = "Booking not found." });
+
+            var ev = booking.Event!;
+            var userRoles = await _userManager.GetRolesAsync(user);
+
+            // Event managers can only update bookings for their own events but admins can do any.
+            if (userRoles.Contains(Roles.EventManager) && ev.EventManagerId != user.Id)
+                return Unauthorized(new { message = "You are not authorised to update bookings for this event." });
+
+            if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
+                return BadRequest(new { message = "Cannot update booking status after the event has concluded or been cancelled." });
+                booking.Status = dto.NewStatus;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Booking status manually updated to {dto.NewStatus}." });
+        }
+
         [HttpPost("reserve")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
         public async Task<IActionResult> ReserveSeat([FromBody] ReserveSeatDto dto)
