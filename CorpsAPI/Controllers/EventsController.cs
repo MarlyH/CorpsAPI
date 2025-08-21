@@ -99,7 +99,7 @@ namespace CorpsAPI.Controllers
                     return BadRequest(new { message = "Image upload failed", detail = ex.Message });
                 }
             }
-            
+
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             var eventStatus = dto.AvailableDate <= today ? EventStatus.Available : EventStatus.Unavailable;
 
@@ -143,7 +143,7 @@ namespace CorpsAPI.Controllers
 
             // Only the manager for the particular event or an admin should be able to cancel
             if (ev.EventManagerId != userId || !User.IsInRole(Roles.Admin))
-                return BadRequest(new { message = ErrorMessages.EventCancelUnauthorised});
+                return BadRequest(new { message = ErrorMessages.EventCancelUnauthorised });
 
             // Cancel all associated bookings that aren't already cancelled
             foreach (var booking in ev.Bookings.Where(b => b.Status != BookingStatus.Cancelled))
@@ -243,5 +243,79 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = SuccessMessages.WaitlistRemoveSuccessful });
         }
+
+
+        // GET: api/Events/{eventId}/attendees
+        [HttpGet("{eventId}/attendees")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetAttendeesForEvent(int eventId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            // EventManager can only access their own events (Admin can see all)
+            if (User.IsInRole(Roles.EventManager) && !User.IsInRole(Roles.Admin))
+            {
+                var ownerId = await _context.Events
+                    .Where(e => e.EventId == eventId)
+                    .Select(e => e.EventManagerId)
+                    .FirstOrDefaultAsync();
+
+                if (ownerId == null) return NotFound(new { message = ErrorMessages.EventNotFound });
+                if (ownerId != userId) return Forbid();
+            }
+
+            var bookings = await _context.Bookings
+                .Include(b => b.User)
+                .Include(b => b.Child)
+                .Where(b => b.EventId == eventId)
+                .ToListAsync();
+
+            var result = bookings.Select(b => new EventAttendeeDto
+            {
+                BookingId = b.BookingId,
+                Name = b.IsForChild
+                    ? (b.Child != null
+                        ? $"{b.Child.FirstName} {b.Child.LastName}"
+                        : (b.ReservedBookingAttendeeName ?? "Child"))
+                    : (b.ReservedBookingAttendeeName
+                        ?? (b.User != null ? $"{b.User.FirstName} {b.User.LastName}" : "User")),
+                Status     = b.Status,
+                SeatNumber = b.SeatNumber,
+                IsForChild = b.IsForChild
+            });
+
+            return Ok(result);
+        }
+
+        // POST: api/Events/{eventId}/attendance
+        [HttpPost("{eventId}/attendance")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> UpdateAttendance(int eventId, [FromBody] UpdateAttendanceDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+            // EventManager can only update attendance for their own events
+            if (User.IsInRole(Roles.EventManager) && !User.IsInRole(Roles.Admin))
+            {
+                var ownerId = await _context.Events
+                    .Where(e => e.EventId == eventId)
+                    .Select(e => e.EventManagerId)
+                    .FirstOrDefaultAsync();
+
+                if (ownerId == null) return NotFound(new { message = ErrorMessages.EventNotFound });
+                if (ownerId != userId) return Forbid();
+            }
+
+            var booking = await _context.Bookings
+                .FirstOrDefaultAsync(b => b.EventId == eventId && b.BookingId == dto.BookingId);
+
+            if (booking == null) return NotFound(new { message = "Booking not found." });
+
+            booking.Status = dto.NewStatus;
+
+            return Ok(new { message = $"Attendance updated to {dto.NewStatus}." });
+        }
+
     }
+    
 }
