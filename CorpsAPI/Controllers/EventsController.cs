@@ -312,6 +312,7 @@ namespace CorpsAPI.Controllers
             if (booking == null) return NotFound(new { message = "Booking not found." });
 
             booking.Status = dto.NewStatus;
+            await _context.SaveChangesAsync();
 
             return Ok(new { message = $"Attendance updated to {dto.NewStatus}." });
         }
