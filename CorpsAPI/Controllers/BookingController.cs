@@ -210,22 +210,23 @@ namespace CorpsAPI.Controllers
                 return NotFound(new { message = "Booking not found." });
 
             var ev = booking.Event!;
-
             if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
                 return BadRequest(new { message = "You cannot cancel a booking after the event has concluded." });
 
-            // get available seats before we actually cancel booking.
-            // This way we can check if the event was full.
-            bool wasFull = ev.AvailableSeats <= 0;
+            // count active before we cancel
+            var activeBefore = await _context.Bookings.CountAsync(b =>
+                b.EventId == ev.EventId &&
+                b.Status  != BookingStatus.Cancelled &&
+                b.SeatNumber != null);
+            var wasFull = activeBefore >= ev.TotalSeats;
 
+            // cancel + free seat
             booking.Status = BookingStatus.Cancelled;
             booking.SeatNumber = null;
-            var result = await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
             if (wasFull)
             {
-                // send notification to anybody on waitlist
-
                 var waitlistEntries = await _context.Waitlists
                     .Where(w => w.EventId == ev.EventId)
                     .Include(w => w.User)
@@ -233,21 +234,18 @@ namespace CorpsAPI.Controllers
 
                 foreach (var entry in waitlistEntries)
                 {
-                    var user = entry.User!;
                     await _notificationService.SendCrossPlatformNotificationAsync(
-                        user.Id, 
-                        "Seat Available!",
-                        "A spot just opened up for an event you're interested in. Book now before it's gone!");
-
-                    // now mark waitlist entity for deletion
+                        entry.UserId,
+                        "Seat available!",
+                        $"A seat just opened for {ev.Location?.Name} on {ev.StartDate:d}.");
                     _context.Remove(entry);
-                    
                 }
-                // delete all at once
                 await _context.SaveChangesAsync();
             }
+
             return Ok(new { message = "Booking successfully cancelled." });
         }
+
 
         [HttpPost("scan")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
@@ -284,31 +282,33 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> ManualStatusUpdate([FromBody] ManualStatusUpdateDto dto)
         {
             var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return Unauthorized();
+            if (user == null) return Unauthorized();
 
             var booking = await _context.Bookings
                 .Include(b => b.Event)
                 .FirstOrDefaultAsync(b => b.BookingId == dto.BookingId);
 
-            if (booking == null)
-                return NotFound(new { message = "Booking not found." });
+            if (booking == null) return NotFound(new { message = "Booking not found." });
 
             var ev = booking.Event!;
             var userRoles = await _userManager.GetRolesAsync(user);
 
-            // Event managers can only update bookings for their own events but admins can do any.
             if (userRoles.Contains(Roles.EventManager) && ev.EventManagerId != user.Id)
                 return Unauthorized(new { message = "You are not authorised to update bookings for this event." });
 
             if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
                 return BadRequest(new { message = "Cannot update booking status after the event has concluded or been cancelled." });
-                booking.Status = dto.NewStatus;
+
+            booking.Status = dto.NewStatus;
+
+            // free the seat when cancelling
+            if (dto.NewStatus == BookingStatus.Cancelled)
+                booking.SeatNumber = null;
 
             await _context.SaveChangesAsync();
-
             return Ok(new { message = $"Booking status manually updated to {dto.NewStatus}." });
         }
+
 
         [HttpPost("reserve")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]

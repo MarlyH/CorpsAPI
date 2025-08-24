@@ -32,33 +32,76 @@ namespace CorpsAPI.Controllers
         [HttpGet]
         public async Task<IActionResult> GetEvents()
         {
-            var events = await _context.Events
+            var list = await _context.Events
                 .Where(e => e.Status == EventStatus.Available)
-                .Include(e => e.Location)
-                .Include(e => e.Bookings)
+                .Select(e => new
+                {
+                    e.EventId,
+                    LocationName = e.Location!.Name,
+                    e.StartDate,
+                    e.StartTime,
+                    e.EndTime,
+                    e.SessionType,
+                    e.SeatingMapImgSrc,
+                    e.TotalSeats,
+                    AvailableSeatsCount = e.TotalSeats - _context.Bookings.Count(b =>
+                        b.EventId == e.EventId &&
+                        b.Status  != BookingStatus.Cancelled &&
+                        b.SeatNumber != null)
+                })
                 .ToListAsync();
 
-            var dtos = events.Select(e => new GetAllEventsDto(e)).ToList();
-
-            return Ok(dtos);
+            return Ok(list);
         }
+
 
         // GET: api/Events/5
         [HttpGet("{id}")]
         public async Task<IActionResult> GetEvent(int id)
         {
             var ev = await _context.Events
-            .Include(e => e.Location)
-            .Include(e => e.Bookings)
-            .FirstOrDefaultAsync(e => e.EventId == id);
+                .Include(e => e.Location)
+                .FirstOrDefaultAsync(e => e.EventId == id);
 
             if (ev == null)
                 return NotFound(new { message = ErrorMessages.EventNotFound });
 
-            var dto = new GetEventDto(ev);
+            // Seats currently taken by active bookings
+            var taken = await _context.Bookings
+                .Where(b => b.EventId == id &&
+                            b.Status != BookingStatus.Cancelled &&
+                            b.SeatNumber != null)
+                .Select(b => b.SeatNumber!.Value)
+                .ToListAsync();
+
+            var available = Enumerable.Range(1, ev.TotalSeats).Except(taken).ToList();
+
+            // (Optional but recommended) prevent any caching
+            Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0";
+
+            // Shape the payload to what the app expects
+            var dto = new
+            {
+                eventId = ev.EventId,
+                locationName = ev.Location?.Name,
+                startDate = ev.StartDate,
+                startTime = ev.StartTime,
+                endTime = ev.EndTime,
+                sessionType = ev.SessionType,
+                seatingMapImgSrc = ev.SeatingMapImgSrc,
+                description = ev.Description,
+                address = ev.Address,
+
+                totalSeats = ev.TotalSeats,
+                availableSeats = available,
+                availableSeatsCount = available.Count,
+
+                status = ev.Status
+            };
 
             return Ok(dto);
         }
+
 
         // POST: api/Events
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
@@ -197,32 +240,26 @@ namespace CorpsAPI.Controllers
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
-            var alreadyExists = await _context.Waitlists
-                .AnyAsync(w => w.EventId == eventId && w.UserId == userId);
-            if (alreadyExists)
-                return BadRequest(new { message = ErrorMessages.AlreadyOnWaitlist });
+            var already = await _context.Waitlists.AnyAsync(w => w.EventId == eventId && w.UserId == userId);
+            if (already) return BadRequest(new { message = ErrorMessages.AlreadyOnWaitlist });
 
-            var ev = await _context.Events
-                .Include(e => e.Bookings)
-                .FirstOrDefaultAsync(e => e.EventId == eventId);
+            var ev = await _context.Events.FirstOrDefaultAsync(e => e.EventId == eventId);
+            if (ev == null) return NotFound(new { message = ErrorMessages.EventNotFound });
 
-            if (ev == null)
-                return NotFound(new { message = ErrorMessages.EventNotFound });
+            var activeCount = await _context.Bookings.CountAsync(b =>
+                b.EventId == eventId &&
+                b.Status  != BookingStatus.Cancelled &&
+                b.SeatNumber != null);
 
-            if (ev.AvailableSeats > 0)
+            if (activeCount < ev.TotalSeats)
                 return BadRequest(new { message = ErrorMessages.SeatsStillAvailable });
 
-            var entry = new Waitlist
-            {
-                EventId = eventId,
-                UserId = userId
-            };
-
-            _context.Waitlists.Add(entry);
+            _context.Waitlists.Add(new Waitlist { EventId = eventId, UserId = userId });
             await _context.SaveChangesAsync();
 
             return Ok(new { message = SuccessMessages.WaitlistAddSuccessful });
         }
+
 
         [HttpDelete("{eventId}/waitlist")]
         [Authorize]
@@ -294,28 +331,26 @@ namespace CorpsAPI.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-            // EventManager can only update attendance for their own events
             if (User.IsInRole(Roles.EventManager) && !User.IsInRole(Roles.Admin))
             {
-                var ownerId = await _context.Events
-                    .Where(e => e.EventId == eventId)
-                    .Select(e => e.EventManagerId)
-                    .FirstOrDefaultAsync();
-
+                var ownerId = await _context.Events.Where(e => e.EventId == eventId)
+                    .Select(e => e.EventManagerId).FirstOrDefaultAsync();
                 if (ownerId == null) return NotFound(new { message = ErrorMessages.EventNotFound });
                 if (ownerId != userId) return Forbid();
             }
 
             var booking = await _context.Bookings
                 .FirstOrDefaultAsync(b => b.EventId == eventId && b.BookingId == dto.BookingId);
-
             if (booking == null) return NotFound(new { message = "Booking not found." });
 
             booking.Status = dto.NewStatus;
-            await _context.SaveChangesAsync();
+            if (dto.NewStatus == BookingStatus.Cancelled)
+                booking.SeatNumber = null; // free it
 
+            await _context.SaveChangesAsync();
             return Ok(new { message = $"Attendance updated to {dto.NewStatus}." });
         }
+
 
     }
     
