@@ -175,11 +175,14 @@ namespace CorpsAPI.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var bookings = await _context.Bookings
-                .Include(b => b.Event)
-                .Include(b => b.Child)   // for child bookings
-                .Include(b => b.User)    // for adult bookings
-                .Where(b => b.UserId == userId || (b.Child != null && b.UserId == userId))
-                .Select(b => new BookingResponseDto {
+                .AsNoTracking()
+                .Include(b => b.Event).ThenInclude(e => e.Location)
+                .Include(b => b.Child)
+                .Include(b => b.User)
+                // drop child-bookings whose Child was deleted
+                .Where(b => b.UserId == userId && (!b.IsForChild || b.ChildId != null))
+                .Select(b => new BookingResponseDto
+                {
                     BookingId = b.BookingId,
                     EventId = b.EventId,
                     EventName = b.Event.Location!.Name,
@@ -189,8 +192,12 @@ namespace CorpsAPI.Controllers
                     CanBeLeftAlone = b.CanBeLeftAlone,
                     QrCodeData = b.QrCodeData,
                     AttendeeName = b.IsForChild
-                        ? $"{b.Child!.FirstName} {b.Child!.LastName}"
-                        : $"{b.User!.FirstName} {b.User!.LastName}"
+                        ? (b.Child != null
+                            ? $"{b.Child.FirstName} {b.Child.LastName}"
+                            : (b.ReservedBookingAttendeeName ?? "Child"))
+                        : (b.User != null
+                            ? $"{b.User.FirstName} {b.User.LastName}"
+                            : "User")
                 })
                 .ToListAsync();
 

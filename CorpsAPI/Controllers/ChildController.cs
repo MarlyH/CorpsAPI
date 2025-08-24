@@ -148,14 +148,37 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            var child = await _context.Children.FirstOrDefaultAsync(c => c.ChildId == id && c.ParentUserId == user.Id);
+            // make sure the caller owns this child
+            var child = await _context.Children
+                .FirstOrDefaultAsync(c => c.ChildId == id && c.ParentUserId == user.Id);
+
             if (child == null)
                 return NotFound(new { message = "Child not found." });
 
+            // cancel and free any active bookings for this child
+            var activeBookings = await _context.Bookings
+                .Where(b => b.IsForChild
+                            && b.ChildId == id
+                            && b.Status != BookingStatus.Cancelled)
+                .ToListAsync();
+
+            foreach (var b in activeBookings)
+            {
+                b.Status = BookingStatus.Cancelled;
+                b.SeatNumber = null; // free seat
+
+                // break FK so the child can be deleted (and keep a display name for history)
+                if (string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName))
+                    b.ReservedBookingAttendeeName = $"{child.FirstName} {child.LastName}";
+
+                b.ChildId = null;
+                b.IsForChild = false;
+            }
             _context.Children.Remove(child);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Child deleted successfully." });
+            return Ok(new { message = "Child deleted successfully. Associated bookings were cancelled and seats freed." });
         }
+
     }
 }
