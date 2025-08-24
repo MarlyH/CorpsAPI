@@ -237,7 +237,7 @@ namespace CorpsAPI.Controllers
                     await _notificationService.SendCrossPlatformNotificationAsync(
                         entry.UserId,
                         "Seat available!",
-                        $"A seat just opened for {ev.Location?.Name} on {ev.StartDate:d}.");
+                        $"A seat just opened for the venue in {ev.Location} on {ev.StartDate:d}.");
                     _context.Remove(entry);
                 }
                 await _context.SaveChangesAsync();
