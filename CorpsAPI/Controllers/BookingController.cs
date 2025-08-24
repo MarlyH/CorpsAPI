@@ -204,6 +204,7 @@ namespace CorpsAPI.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var booking = await _context.Bookings
                 .Include(b => b.Event)
+                    .ThenInclude(e => e.Location)
                 .FirstOrDefaultAsync(b => b.BookingId == id);
 
             if (booking == null || booking.UserId != userId)
@@ -216,7 +217,7 @@ namespace CorpsAPI.Controllers
             // count active before we cancel
             var activeBefore = await _context.Bookings.CountAsync(b =>
                 b.EventId == ev.EventId &&
-                b.Status  != BookingStatus.Cancelled &&
+                b.Status   != BookingStatus.Cancelled &&
                 b.SeatNumber != null);
             var wasFull = activeBefore >= ev.TotalSeats;
 
@@ -229,20 +230,27 @@ namespace CorpsAPI.Controllers
             {
                 var waitlistEntries = await _context.Waitlists
                     .Where(w => w.EventId == ev.EventId)
-                    .Include(w => w.User)
                     .ToListAsync();
+
+                // Build "where" + "when" strings for waitlist notifs
+                var venueName = ev.Location?.Name;
+                var where = !string.IsNullOrWhiteSpace(venueName)
+                    ? (!string.IsNullOrWhiteSpace(ev.Address) ? $"{venueName}, {ev.Address}" : venueName)
+                    : (ev.Address ?? "TBA");
+
+                var when = $"{ev.StartDate:ddd, MMM d} at {ev.StartTime:hh\\:mm}";
 
                 foreach (var entry in waitlistEntries)
                 {
                     await _notificationService.SendCrossPlatformNotificationAsync(
                         entry.UserId,
                         "Seat available!",
-                        $"A seat just opened for the venue in {ev.Location} on {ev.StartDate:d}.");
+                        $"A seat just opened at {where} on {when}.");
                     _context.Remove(entry);
                 }
+
                 await _context.SaveChangesAsync();
             }
-
             return Ok(new { message = "Booking successfully cancelled." });
         }
 
