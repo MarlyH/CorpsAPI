@@ -302,9 +302,11 @@ namespace CorpsAPI.Controllers
             }
 
             var bookings = await _context.Bookings
+                .AsNoTracking()
                 .Include(b => b.User)
                 .Include(b => b.Child)
-                .Where(b => b.EventId == eventId)
+                .Where(b => b.EventId == eventId &&
+                            b.Status != BookingStatus.Cancelled)   // exclude cancelled bookings
                 .ToListAsync();
 
             var result = bookings.Select(b => new EventAttendeeDto
