@@ -261,37 +261,140 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = "Booking successfully cancelled." });
         }
 
+        //this is a depreciated scan in/out toggle 
 
-        [HttpPost("scan")]
+        // [HttpPost("scan")]
+        // [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
+        // public async Task<IActionResult> ScanQrCode([FromBody] ScanQrCodeDto dto)
+        // {
+        //     var booking = await _context.Bookings
+        //         .Include(b => b.Event)
+        //         .FirstOrDefaultAsync(b => b.QrCodeData == dto.QrCodeData);
+
+        //     if (booking == null)
+        //         return NotFound(new { message = "Invalid QR code." });
+
+        //     switch (booking.Status)
+        //     {
+        //         case BookingStatus.Booked:
+        //             booking.Status = BookingStatus.CheckedIn;
+        //             break;
+        //         case BookingStatus.CheckedIn:
+        //             booking.Status = BookingStatus.CheckedOut;
+        //             break;
+        //         case BookingStatus.CheckedOut:
+        //             return BadRequest(new { message = "Booking already checked out." });
+        //         default:
+        //             return BadRequest(new { message = "Unknown booking status." });
+        //     }
+
+        //     await _context.SaveChangesAsync();
+
+        //     return Ok(new { message = $"Booking status updated."  });
+        // }
+
+        [HttpPost("scan-info")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
-        public async Task<IActionResult> ScanQrCode([FromBody] ScanQrCodeDto dto)
+        public async Task<IActionResult> ScanInfo([FromBody] ScanQrCodeDto dto)
         {
             var booking = await _context.Bookings
-                .Include(b => b.Event)
+                .AsNoTracking()
+                .Include(b => b.Event).ThenInclude(e => e.Location)
+                .Include(b => b.Child)
+                .Include(b => b.User)
                 .FirstOrDefaultAsync(b => b.QrCodeData == dto.QrCodeData);
 
             if (booking == null)
                 return NotFound(new { message = "Invalid QR code." });
 
-            switch (booking.Status)
+            var attendee = booking.IsForChild
+                ? (booking.Child != null
+                    ? $"{booking.Child.FirstName} {booking.Child.LastName}"
+                    : (booking.ReservedBookingAttendeeName ?? "Child"))
+                : (booking.User != null
+                    ? $"{booking.User.FirstName} {booking.User.LastName}"
+                    : "User");
+
+            var ev = booking.Event!;
+            var resp = new BookingScanInfoResponse
             {
-                case BookingStatus.Booked:
-                    booking.Status = BookingStatus.CheckedIn;
-                    break;
-                case BookingStatus.CheckedIn:
-                    booking.Status = BookingStatus.CheckedOut;
-                    break;
-                case BookingStatus.CheckedOut:
-                    return BadRequest(new { message = "Booking already checked out." });
-                default:
-                    return BadRequest(new { message = "Unknown booking status." });
-            }
+                BookingId = booking.BookingId,
+                EventId = ev.EventId,
+                AttendeeName = attendee,
+                SessionType = ev.SessionType.ToString(),
+                Date = ev.StartDate.ToString("yyyy-MM-dd"),
+                StartTime = ev.StartTime.ToString(@"hh\:mm"),
+                EndTime = ev.EndTime.ToString(@"hh\:mm"),
+                SeatNumber = booking.SeatNumber,
+                Status = booking.Status.ToString()
+            };
 
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = $"Booking status updated."  });
+            return Ok(resp);
         }
 
+        [HttpPost("check-in")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
+        public async Task<IActionResult> CheckIn([FromBody] BookingIdDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var booking = await _context.Bookings
+                .Include(b => b.Event)
+                .FirstOrDefaultAsync(b => b.BookingId == dto.BookingId);
+
+            if (booking == null) return NotFound(new { message = "Booking not found." });
+
+            var ev = booking.Event!;
+            // Event Managers: only for their own event
+
+            var roles = await _userManager.GetRolesAsync(user);
+            if (roles.Contains(Roles.EventManager) && ev.EventManagerId != user.Id)
+                return Unauthorized(new { message = "You are not authorised to update bookings for this event." });
+
+            if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
+                return BadRequest(new { message = "Cannot check in after the event has concluded or been cancelled." });
+
+            if (booking.Status != BookingStatus.Booked)
+                return BadRequest(new { message = "Only 'Booked' bookings can be checked in." });
+
+            booking.Status = BookingStatus.CheckedIn;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Checked in.", status = booking.Status.ToString() });
+        }
+
+        [HttpPost("check-out")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
+        public async Task<IActionResult> CheckOut([FromBody] BookingIdDto dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var booking = await _context.Bookings
+                .Include(b => b.Event)
+                .FirstOrDefaultAsync(b => b.BookingId == dto.BookingId);
+
+            if (booking == null) return NotFound(new { message = "Booking not found." });
+
+            var ev = booking.Event!;
+            var roles = await _userManager.GetRolesAsync(user);
+            if (roles.Contains(Roles.EventManager) && ev.EventManagerId != user.Id)
+                return Unauthorized(new { message = "You are not authorised to update bookings for this event." });
+
+            if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
+                return BadRequest(new { message = "Cannot check out after the event has concluded or been cancelled." });
+
+            if (booking.Status != BookingStatus.CheckedIn)
+                return BadRequest(new { message = "Only 'CheckedIn' bookings can be checked out." });
+
+            booking.Status = BookingStatus.CheckedOut;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Checked out.", status = booking.Status.ToString() });
+        }
+
+        // for manuel overide of event status
         [HttpPost("manual-status")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
         public async Task<IActionResult> ManualStatusUpdate([FromBody] ManualStatusUpdateDto dto)

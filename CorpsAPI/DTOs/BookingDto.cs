@@ -24,11 +24,6 @@ namespace CorpsAPI.DTOs
         public string QrCodeData { get; set; } = default!;
     }
 
-    public class ScanQrCodeDto
-    {
-        public string QrCodeData { get; set; } = default!;
-    }
-
     public class ManualStatusUpdateDto
     {
         public int BookingId { get; set; }
@@ -40,5 +35,21 @@ namespace CorpsAPI.DTOs
         public int EventId { get; set; }
         public int SeatNumber { get; set; }
         public string? AttendeeName { get; set; } = null;
+    }
+    // for use in scanning qrcode in app
+    public class ScanQrCodeDto { public string QrCodeData { get; set; } = default!; }
+    public class BookingIdDto   { public int BookingId   { get; set; } }
+
+    public class BookingScanInfoResponse
+    {
+        public int BookingId { get; set; }
+        public int EventId { get; set; }
+        public string AttendeeName { get; set; } = "";
+        public string? SessionType { get; set; }
+        public string? Date { get; set; }
+        public string? StartTime { get; set; }
+        public string? EndTime { get; set; }
+        public int? SeatNumber { get; set; }
+        public string Status { get; set; } = "";   // "Booked" | "CheckedIn" | "CheckedOut" | "Cancelled"
     }
 }
