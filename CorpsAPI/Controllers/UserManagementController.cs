@@ -124,6 +124,23 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = $"Suspension cleared for {dto.Email}." });
         }
 
+        [HttpPost("unban/{userId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> Unban(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return NotFound(new { message = "User not found." });
+
+            user.AttendanceStrikeCount = 0;
+            user.DateOfLastStrike = null;
+            var res = await _userManager.UpdateAsync(user);
+            if (!res.Succeeded) return StatusCode(500, new { message = "Failed to clear strikes." });
+
+            return Ok(new { message = "Strikes cleared." });
+        }
+
+
+
         // list currently suspended users
         [HttpGet("banned-users")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
@@ -147,6 +164,7 @@ namespace CorpsAPI.Controllers
                     var until = u.DateOfLastStrike?.ToDateTime(TimeOnly.MinValue).AddDays(90);
                     banned.Add(new BannedUserDto
                     {
+                        Id = u.Id,
                         Email = u.Email!,
                         FirstName = u.FirstName,
                         LastName = u.LastName,
@@ -154,6 +172,7 @@ namespace CorpsAPI.Controllers
                         DateOfLastStrike = u.DateOfLastStrike,
                         SuspensionUntil = until
                     });
+
                 }
                 else
                 {
