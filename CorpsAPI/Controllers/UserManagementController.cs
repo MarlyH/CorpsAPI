@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CorpsAPI.Controllers
 {
@@ -67,5 +68,104 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = SuccessMessages.ChangeRoleSuccess });
         }
+
+        // self-appeal: uses IsSuspended, clears strikes only if currently suspended
+        [HttpPost("ban-appeal/self")]
+        [Authorize(Roles = $"{Roles.User},{Roles.Staff},{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> AppealBanForSelf()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            // this will auto-clear if 90 days have passed, using app user model
+            var suspended = user.IsSuspended;
+
+            if (!suspended)
+                return BadRequest(new { message = "No active suspension to appeal." });
+
+            user.AttendanceStrikeCount = 0;
+            user.DateOfLastStrike = null;
+
+            var res = await _userManager.UpdateAsync(user);
+            if (!res.Succeeded)
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Failed to clear suspension." });
+
+            return Ok(new { message = "Suspension cleared.", isSuspended = false });
+        }
+
+        // admin / event manager: clear a specific user's suspension
+        [HttpPost("ban-appeal/for-user")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> AppealBanForUser([FromBody] BanAppealRequest dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Email))
+                return BadRequest(new { message = "Email is required." });
+
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+                return NotFound(new { message = "User not found." });
+
+            // triggers app user models 90-day auto-clear if it’s time
+            var suspended = user.IsSuspended;
+
+            if (!suspended)
+                return BadRequest(new { message = "User has no active suspension." });
+
+            user.AttendanceStrikeCount = 0;
+            user.DateOfLastStrike = null;
+
+            var res = await _userManager.UpdateAsync(user);
+            if (!res.Succeeded)
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "Failed to clear suspension." });
+
+            return Ok(new { message = $"Suspension cleared for {dto.Email}." });
+        }
+
+        // list currently suspended users
+        [HttpGet("banned-users")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetBannedUsers()
+        {
+            // fetch likely candidates only; IsSuspended will auto-clear if window passed
+            var candidates = await _userManager.Users
+                .Where(u => u.AttendanceStrikeCount >= 3 && u.DateOfLastStrike != null)
+                .ToListAsync();
+
+            var now = DateTime.Today;
+
+            var banned = new List<BannedUserDto>();
+
+            foreach (var u in candidates)
+            {
+                var wasSuspended = u.IsSuspended; // may auto-reset if 90+ days elapsed
+
+                if (wasSuspended)
+                {
+                    var until = u.DateOfLastStrike?.ToDateTime(TimeOnly.MinValue).AddDays(90);
+                    banned.Add(new BannedUserDto
+                    {
+                        Email = u.Email!,
+                        FirstName = u.FirstName,
+                        LastName = u.LastName,
+                        AttendanceStrikeCount = u.AttendanceStrikeCount,
+                        DateOfLastStrike = u.DateOfLastStrike,
+                        SuspensionUntil = until
+                    });
+                }
+                else
+                {
+                    // IsSuspended may have cleared strikes; persist that
+                    await _userManager.UpdateAsync(u);
+                }
+            }
+
+            // soonest to expire first
+            banned = banned.OrderBy(b => b.SuspensionUntil ?? now).ToList();
+            return Ok(banned);
+        }
+
     }
 }
