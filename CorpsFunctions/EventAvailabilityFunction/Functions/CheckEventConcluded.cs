@@ -17,7 +17,7 @@ public class CheckEventConcluded
     }
 
     [Function("CheckEventConcluded")]
-    public async Task Run([TimerTrigger("0 0 11 * * *")] TimerInfo timer)  // run at midnight NZD = 11:00 UTC
+    public async Task Run([TimerTrigger("0 0 11 * * *")] TimerInfo timer)  // run at 11:00 UTC (midnight NZT)
     {
         _logger.LogInformation($"Check Event Concluded Function started at: {DateTime.Now}");
 
@@ -37,21 +37,26 @@ public class CheckEventConcluded
 
         foreach (var ev in eventsToUpdate)
         {
-            // if a user hasn't been checked in, we can assume they haven't attended the event.
-            // Therefore, we strike their account. 
-            // If a user has multiple bookings for one event (multiple children),
-            // they only receive a single strike.
-            var unattendedBookings = ev.Bookings.Where(b => b.Status == BookingStatus.Booked);
+            // Find bookings where the user never checked in
+            var unattendedBookings = ev.Bookings
+                .Where(b => b.Status == BookingStatus.Booked && b.User != null)
+                .ToList();
+
+            // Strike each unique user once
             var unattendedUsers = unattendedBookings
-                .Where(b => b.User != null)
-                .Select(b => b.User)
-                .DistinctBy(u => u!.Id);
+                .Select(b => b.User!)
+                .DistinctBy(u => u.Id);
 
             foreach (var user in unattendedUsers)
             {
-                user!.AttendanceStrikeCount++;
+                user.AttendanceStrikeCount++;
                 user.DateOfLastStrike = today;
-                //_logger.LogInformation($"User {user.UserName} received a strike. Strike count: {user.AttendanceStrikeCount}");
+            }
+
+            // Mark all unattended bookings as Striked
+            foreach (var booking in unattendedBookings)
+            {
+                booking.Status = BookingStatus.Striked;
             }
 
             ev.Status = EventStatus.Concluded;
