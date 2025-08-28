@@ -49,74 +49,80 @@ namespace CorpsAPI.Controllers
             if (eventEntity == null || eventEntity.Status != EventStatus.Available)
                 return NotFound(new { message = "Event not found or not available for booking." });
 
-            // only treat seats on non‑cancelled bookings as “taken”
+            // Seat number bounds
+            if (dto.SeatNumber < 1 || dto.SeatNumber > eventEntity.TotalSeats)
+                return BadRequest(new { message = "Seat out of bounds." });
+
+            // Seat taken?
             if (eventEntity.Bookings.Any(b =>
-                    b.SeatNumber == dto.SeatNumber
-                && b.Status     != BookingStatus.Cancelled))
+                    b.SeatNumber == dto.SeatNumber &&
+                    b.Status != BookingStatus.Cancelled &&
+                    b.Status != BookingStatus.Striked))
             {
                 return BadRequest(new { message = "That seat is already taken." });
             }
 
-            if (dto.SeatNumber < 1 || dto.SeatNumber > eventEntity.TotalSeats)
-                return BadRequest(new { message = "Seat out of bounds." });
+            // Capacity (count only active bookings that actually hold a seat)
+            var occupiedSeats = eventEntity.Bookings.Count(b =>
+                b.SeatNumber != null &&
+                b.Status != BookingStatus.Cancelled &&
+                b.Status != BookingStatus.Striked);
 
-            if (eventEntity.AvailableSeats <= 0)
+            if (occupiedSeats >= eventEntity.TotalSeats)
                 return BadRequest(new { message = "No seats available." });
 
+            // Age/duplicate checks
             int bookingAge;
             if (dto.IsForChild)
             {
-                // only block children with *active* bookings
-                if (eventEntity.Bookings.Any(b =>
-                        b.ChildId == dto.ChildId
-                    && b.Status  != BookingStatus.Cancelled))
-                {
-                    return BadRequest(new { message = "This child already has a booking for this event." });
-                }
-
+                // ensure child exists
                 var child = await _context.Children.FindAsync(dto.ChildId);
                 if (child == null)
                     return BadRequest(new { message = "Booking is for child but child ID not found." });
+
+                // duplicate for child (ignore cancelled/striked)
+                if (eventEntity.Bookings.Any(b =>
+                        b.ChildId == dto.ChildId &&
+                        b.Status != BookingStatus.Cancelled &&
+                        b.Status != BookingStatus.Striked))
+                {
+                    return BadRequest(new { message = "This child already has a booking for this event." });
+                }
 
                 bookingAge = child.Age;
             }
             else
             {
-                // only block users with *active* bookings
+                // duplicate for user (ignore cancelled/striked)
                 if (eventEntity.Bookings.Any(b =>
-                        b.UserId == user.Id
-                    && b.Status != BookingStatus.Cancelled))
+                        b.UserId == user.Id &&
+                        b.Status != BookingStatus.Cancelled &&
+                        b.Status != BookingStatus.Striked))
                 {
                     return BadRequest(new { message = "You already have an active booking for this event." });
                 }
 
-                bookingAge = user.Age;
+                bookingAge = user.Age; // <-- fix
             }
 
-            bool AgeIsOk = false;
-
+            // Age gate
+            bool ageIsOk = false;
             switch (eventEntity.SessionType)
             {
                 case EventSessionType.Kids:
-                    if (bookingAge >= 5 && bookingAge < 12)
-                        AgeIsOk = true;
+                    ageIsOk = (bookingAge >= 5 && bookingAge < 12);
                     break;
-
                 case EventSessionType.Teens:
-                    if (bookingAge >= 12 && bookingAge < 16)
-                        AgeIsOk = true;
+                    ageIsOk = (bookingAge >= 12 && bookingAge < 16);
                     break;
-
                 case EventSessionType.Adults:
-                    if (bookingAge >= 16)
-                        AgeIsOk = true;
+                    ageIsOk = (bookingAge >= 16);
                     break;
-
                 default:
                     return BadRequest(new { message = ErrorMessages.InternalServerError });
             }
 
-            if (!AgeIsOk)
+            if (!ageIsOk)
                 return BadRequest(new { message = "Provided age for the booking is not within bounds." });
 
             var booking = new Booking
@@ -130,6 +136,7 @@ namespace CorpsAPI.Controllers
                 IsForChild = dto.IsForChild,
                 ChildId = dto.ChildId
             };
+
 
             _context.Bookings.Add(booking);
             await _context.SaveChangesAsync();
@@ -565,14 +572,22 @@ namespace CorpsAPI.Controllers
             if (!userRoles.Contains(Roles.Admin) || eventEntity.EventManagerId != user.Id)
                 return Forbid();
 
-            if (eventEntity.Bookings.Any(b => b.SeatNumber == dto.SeatNumber && b.Status != BookingStatus.Cancelled))
-                return BadRequest(new { message = "Seat already taken." });
+            if (eventEntity.Bookings.Any(b =>
+                b.SeatNumber == dto.SeatNumber &&
+                b.Status != BookingStatus.Cancelled &&
+                b.Status != BookingStatus.Striked))
+                {
+                    return BadRequest(new { message = "Seat already taken." });
+                }
 
-            if (dto.SeatNumber < 1 || dto.SeatNumber > eventEntity.TotalSeats)
-                return BadRequest(new { message = "Seat number out of range." });
+                var occupiedSeats = eventEntity.Bookings.Count(b =>
+                    b.SeatNumber != null &&
+                    b.Status != BookingStatus.Cancelled &&
+                    b.Status != BookingStatus.Striked);
 
-            if (eventEntity.AvailableSeats <= 0)
-                return BadRequest(new { message = "No seats available." });
+                if (occupiedSeats >= eventEntity.TotalSeats)
+                    return BadRequest(new { message = "No seats available." });
+
 
             var booking = new Booking
             {
