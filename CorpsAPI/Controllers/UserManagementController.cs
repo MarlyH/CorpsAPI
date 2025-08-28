@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using CorpsAPI.Data;
 
 namespace CorpsAPI.Controllers
 {
@@ -16,10 +17,12 @@ namespace CorpsAPI.Controllers
     {
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly UserManager<AppUser> _userManager;
-        public UserManagementController(UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager)
+        private readonly AppDbContext _context;
+        public UserManagementController(UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager, AppDbContext context)
         {
             _userManager = userManager;
             _roleManager = roleManager;
+            _context = context; 
         }
 
         [HttpPost("change-role")]
@@ -279,6 +282,48 @@ namespace CorpsAPI.Controllers
                 
 
             return Ok(results);
+        }
+
+        // GET: /api/UserManagement/user/{userId}/children
+        [HttpGet("user/{userId}/children")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetChildrenForUser(string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return BadRequest(new { message = "UserId is required." });
+
+            // Load user with children in one query
+            var user = await _userManager.Users
+                .Include(u => u.Children)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user is null)
+                return NotFound(new { message = "User not found." });
+
+            var result = user.Children
+                .OrderBy(c => c.LastName).ThenBy(c => c.FirstName)
+                .Select(c => new DTOs.Child.ChildDto
+                {
+                    ChildId = c.ChildId,
+                    FirstName = c.FirstName,
+                    LastName  = c.LastName,
+                    DateOfBirth = c.DateOfBirth,
+                    EmergencyContactName = c.EmergencyContactName,
+                    EmergencyContactPhone = c.EmergencyContactPhone,
+                    Age = CalculateAge(c.DateOfBirth)
+                })
+                .ToList();
+
+            return Ok(result);
+        }
+
+        private static int CalculateAge(DateOnly dob)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var age = today.Year - dob.Year;
+            if (today.Month < dob.Month || (today.Month == dob.Month && today.Day < dob.Day))
+                age--;
+            return age;
         }
 
         [HttpPost("strikes/increment")]
