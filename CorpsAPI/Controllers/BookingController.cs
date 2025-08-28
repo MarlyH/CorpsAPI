@@ -404,6 +404,7 @@ namespace CorpsAPI.Controllers
 
             var booking = await _context.Bookings
                 .Include(b => b.Event)
+                .Include(b => b.User)
                 .FirstOrDefaultAsync(b => b.BookingId == dto.BookingId);
 
             if (booking == null) return NotFound(new { message = "Booking not found." });
@@ -419,9 +420,21 @@ namespace CorpsAPI.Controllers
 
             booking.Status = dto.NewStatus;
 
-            // free the seat when cancelling
+            // Cancel frees seat
             if (dto.NewStatus == BookingStatus.Cancelled)
                 booking.SeatNumber = null;
+
+            // Striked logic
+            if (dto.NewStatus == BookingStatus.Striked)
+            {
+                booking.SeatNumber = null;
+
+                if (booking.User != null)
+                {
+                    booking.User.AttendanceStrikeCount += 1;
+                    booking.User.DateOfLastStrike = DateOnly.FromDateTime(DateTime.Today);
+                }
+            }
 
             await _context.SaveChangesAsync();
             return Ok(new { message = $"Booking status manually updated to {dto.NewStatus}." });

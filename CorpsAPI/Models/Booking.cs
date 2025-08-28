@@ -29,6 +29,7 @@ namespace CorpsAPI.Models
         Booked,
         CheckedIn,
         CheckedOut,
-        Cancelled
+        Cancelled,
+        Striked,
     }
 }
