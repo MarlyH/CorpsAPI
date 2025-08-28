@@ -9,6 +9,7 @@ using System.Security.Claims;
 using CorpsAPI.Constants;
 using System.Data;
 using CorpsAPI.Data;
+using CorpsAPI.DTOs.Child;
 
 namespace CorpsAPI.Controllers
 {
@@ -307,6 +308,7 @@ namespace CorpsAPI.Controllers
             if (booking == null)
                 return NotFound(new { message = "Invalid QR code." });
 
+            var ev = booking.Event!;
             var attendee = booking.IsForChild
                 ? (booking.Child != null
                     ? $"{booking.Child.FirstName} {booking.Child.LastName}"
@@ -315,22 +317,79 @@ namespace CorpsAPI.Controllers
                     ? $"{booking.User.FirstName} {booking.User.LastName}"
                     : "User");
 
-            var ev = booking.Event!;
-            var resp = new BookingScanInfoResponse
+            // Optional child payload (only if IsForChild && Child exists)
+            ChildDto? childDto = null;
+            if (booking.IsForChild && booking.Child != null)
             {
+                childDto = new ChildDto
+                {
+                    ChildId = booking.Child.ChildId,
+                    FirstName = booking.Child.FirstName,
+                    LastName = booking.Child.LastName,
+                    DateOfBirth = booking.Child.DateOfBirth,
+                    EmergencyContactName = booking.Child.EmergencyContactName,
+                    EmergencyContactPhone = booking.Child.EmergencyContactPhone,
+                    Age = CalculateAge(booking.Child.DateOfBirth)
+                };
+            }
+
+            // Optional mini user block (handy context for admins)
+            AdminUserMiniDto? userMini = null;
+            if (booking.User != null)
+            {
+                // trigger IsSuspended property logic
+                var _ = booking.User.IsSuspended;
+
+                userMini = new AdminUserMiniDto
+                {
+                    Id = booking.User.Id,
+                    Email = booking.User.Email,
+                    FirstName = booking.User.FirstName,
+                    LastName = booking.User.LastName,
+                    AttendanceStrikeCount = booking.User.AttendanceStrikeCount,
+                    DateOfLastStrike = booking.User.DateOfLastStrike,
+                    IsSuspended = booking.User.IsSuspended
+                };
+            }
+
+            var resp = new BookingScanDetailDto
+            {
+                // Booking + Event
                 BookingId = booking.BookingId,
                 EventId = ev.EventId,
-                AttendeeName = attendee,
-                SessionType = ev.SessionType.ToString(),
-                Date = ev.StartDate.ToString("yyyy-MM-dd"),
+                EventName = ev.Location?.Name,
+                EventDate = ev.StartDate,
                 StartTime = ev.StartTime.ToString(@"hh\:mm"),
                 EndTime = ev.EndTime.ToString(@"hh\:mm"),
+                SessionType = ev.SessionType.ToString(),
+                LocationName = ev.Location?.Name,
+                Address = ev.Address,
+
+                // Booking fields
                 SeatNumber = booking.SeatNumber,
-                Status = booking.Status.ToString()
+                Status = booking.Status,
+                CanBeLeftAlone = booking.CanBeLeftAlone,
+                QrCodeData = booking.QrCodeData,
+                IsForChild = booking.IsForChild,
+                AttendeeName = attendee,
+
+                // Related
+                Child = childDto,
+                User = userMini
             };
 
             return Ok(resp);
         }
+
+        private static int CalculateAge(DateOnly dob)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var age = today.Year - dob.Year;
+            if (today.Month < dob.Month || (today.Month == dob.Month && today.Day < dob.Day))
+                age--;
+            return age;
+        }
+
 
         [HttpPost("check-in")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
