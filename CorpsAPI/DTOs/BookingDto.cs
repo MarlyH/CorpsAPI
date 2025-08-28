@@ -18,10 +18,11 @@ namespace CorpsAPI.DTOs
         public int BookingId { get; set; }
         public int EventId { get; set; }
         public string EventName { get; set; } = default!;
-        public string AttendeeName { get; set; } = default!;  // ← new
+        public string AttendeeName { get; set; } = default!;
         public DateOnly EventDate { get; set; }
         public int? SeatNumber { get; set; }
         public BookingStatus Status { get; set; }
+        public bool IsForChild { get; set; }
         public bool CanBeLeftAlone { get; set; }
         public string QrCodeData { get; set; } = default!;
     }

@@ -192,6 +192,7 @@ namespace CorpsAPI.Controllers
                     Status = b.Status,
                     CanBeLeftAlone = b.CanBeLeftAlone,
                     QrCodeData = b.QrCodeData,
+                    IsForChild = b.IsForChild,
                     AttendeeName = b.IsForChild
                         ? (b.Child != null
                             ? $"{b.Child.FirstName} {b.Child.LastName}"
@@ -200,6 +201,7 @@ namespace CorpsAPI.Controllers
                             ? $"{b.User.FirstName} {b.User.LastName}"
                             : "User")
                 })
+
                 .ToListAsync();
 
             return Ok(bookings);
