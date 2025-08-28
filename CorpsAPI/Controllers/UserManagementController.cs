@@ -186,5 +186,240 @@ namespace CorpsAPI.Controllers
             return Ok(banned);
         }
 
+        // get lists of account users
+
+        [HttpGet("users")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetAllUsers(
+            [FromQuery] string? q = null, // optional search on name/email
+            [FromQuery] int page = 1,// optional paging (1-based)
+            [FromQuery] int pageSize = 50) // optional page size
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 1;
+            if (pageSize > 200) pageSize = 200; // cap to avoid huge responses
+
+            var query = _userManager.Users.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var term = q.Trim().ToLower();
+                query = query.Where(u =>
+                    (u.FirstName + " " + u.LastName).ToLower().Contains(term) ||
+                    (u.Email ?? "").ToLower().Contains(term));
+            }
+
+            var total = await query.CountAsync();
+
+            var items = await query
+                .OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(u => new UserMiniDto
+                {
+                    Id = u.Id,
+                    Email = u.Email ?? string.Empty,
+                    FirstName = u.FirstName,
+                    LastName = u.LastName
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                total,
+                page,
+                pageSize,
+                items
+            });
+        }
+        // POST: /api/UserManagement/users/by-ids
+        // Body: { "ids": ["<id1>", "<id2>", ...] }
+        // Bulk lookup to resolve many userIds -> names/strike info in one call
+        [HttpPost("users/by-ids")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetUsersByIds([FromBody] UsersByIdsRequest req)
+        {
+            if (req?.Ids == null || req.Ids.Count == 0)
+                return BadRequest(new { message = "Provide at least one Id." });
+
+            // Fetch users in one query
+            var users = await _userManager.Users
+                .Where(u => req.Ids.Contains(u.Id))
+                .ToListAsync();
+
+            // Build map of Id -> roles to avoid N+1 where possible
+            // (Identity doesn't expose a direct batch API; we’ll fetch per-user here.)
+            var results = new List<UserSummaryDto?>(users.Count);
+
+            foreach (var u in users)
+            {
+                var roles = await _userManager.GetRolesAsync(u);
+
+                // Run auto-clear check, persist if changed
+                var _ = u.IsSuspended;
+                await _userManager.UpdateAsync(u);
+
+                results.Add(new UserSummaryDto
+                {
+                    Id = u.Id,
+                    Email = u.Email ?? string.Empty,
+                    FirstName = u.FirstName,
+                    LastName = u.LastName,
+                    Roles = roles.ToList(),
+                    AttendanceStrikeCount = u.AttendanceStrikeCount,
+                    DateOfLastStrike = u.DateOfLastStrike,
+                    IsSuspended = u.IsSuspended
+                });
+            }
+
+            // Maintain input order if you want:
+            results = req.Ids
+                .Select(id => results.FirstOrDefault(r => r?.Id == id))
+                .ToList();
+                
+
+            return Ok(results);
+        }
+
+        [HttpPost("strikes/increment")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> IncrementStrikes([FromBody] StrikeAdjustByIdDto dto)
+        {
+            if (dto is null || string.IsNullOrWhiteSpace(dto.UserId))
+                return BadRequest(new { message = "UserId is required." });
+
+            var amount = dto.Amount <= 0 ? 1 : dto.Amount; // default to +1
+            return await AdjustStrikesInternal(dto.UserId, +amount);
+        }
+
+        [HttpPost("strikes/decrement")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> DecrementStrikes([FromBody] StrikeAdjustByIdDto dto)
+        {
+            if (dto is null || string.IsNullOrWhiteSpace(dto.UserId))
+                return BadRequest(new { message = "UserId is required." });
+
+            var amount = dto.Amount <= 0 ? 1 : dto.Amount; // default to -1
+            return await AdjustStrikesInternal(dto.UserId, -amount);
+        }
+
+        [HttpPost("strikes/set")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> SetStrikes([FromBody] StrikeSetByIdDto dto)
+        {
+            if (dto is null || string.IsNullOrWhiteSpace(dto.UserId))
+                return BadRequest(new { message = "UserId is required." });
+            if (dto.Count < 0)
+                return BadRequest(new { message = "Count must be >= 0." });
+
+            var user = await _userManager.FindByIdAsync(dto.UserId);
+            if (user is null)
+                return NotFound(new { message = "User not found." });
+
+            // Event Managers cannot modify Admin users
+            var roles = await _userManager.GetRolesAsync(user);
+            if (User.IsInRole(Roles.EventManager) && roles.Contains(Roles.Admin))
+                return Forbid("Event Managers cannot modify Admin users.");
+
+            var previous = user.AttendanceStrikeCount;
+            user.AttendanceStrikeCount = dto.Count;
+
+            if (dto.Count == 0)
+            {
+                user.DateOfLastStrike = null;
+            }
+            else if (dto.Count > previous) // strikes increased
+            {
+                user.DateOfLastStrike = TodayInNZT();
+            }
+            // else (reduced but still > 0): keep existing DateOfLastStrike as most-recent strike date
+
+            var res = await _userManager.UpdateAsync(user);
+            if (!res.Succeeded)
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Failed to update strikes." });
+
+            return Ok(new
+            {
+                message = "Strike count set.",
+                user = new
+                {
+                    id = user.Id,
+                    email = user.Email,
+                    firstName = user.FirstName,
+                    lastName = user.LastName,
+                    attendanceStrikeCount = user.AttendanceStrikeCount,
+                    dateOfLastStrike = user.DateOfLastStrike,
+                    isSuspended = user.IsSuspended
+                }
+            });
+        }
+        
+
+        private static DateOnly TodayInNZT()
+        {
+            // Windows: "New Zealand Standard Time"
+            // Linux (if needed): "Pacific/Auckland"
+            var tzId = "New Zealand Standard Time";
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+                var nowNzt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+                return DateOnly.FromDateTime(nowNzt);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Fallback for Linux containers
+                var tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific/Auckland");
+                var nowNzt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+                return DateOnly.FromDateTime(nowNzt);
+            }
+        }
+
+        private async Task<IActionResult> AdjustStrikesInternal(string userId, int delta)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user is null)
+                return NotFound(new { message = "User not found." });
+
+            var roles = await _userManager.GetRolesAsync(user);
+            if (User.IsInRole(Roles.EventManager) && roles.Contains(Roles.Admin))
+                return Forbid("Event Managers cannot modify Admin users.");
+
+            var previous = user.AttendanceStrikeCount;
+            var next = previous + delta;
+            if (next < 0) next = 0;
+
+            user.AttendanceStrikeCount = next;
+
+            if (delta > 0) // added strikes
+            {
+                user.DateOfLastStrike = TodayInNZT();
+            }
+            else if (next == 0) // cleared all strikes
+            {
+                user.DateOfLastStrike = null;
+            }
+            // else (reduced but still > 0): keep last strike date
+
+            var res = await _userManager.UpdateAsync(user);
+            if (!res.Succeeded)
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Failed to update strikes." });
+
+            return Ok(new
+            {
+                message = delta > 0 ? $"Added {delta} strike(s)." : $"Removed {Math.Abs(delta)} strike(s).",
+                user = new {
+                    id = user.Id,
+                    email = user.Email,
+                    firstName = user.FirstName,
+                    lastName = user.LastName,
+                    attendanceStrikeCount = user.AttendanceStrikeCount,
+                    dateOfLastStrike = user.DateOfLastStrike,
+                    isSuspended = user.IsSuspended
+                }
+            });
+        }
+
     }
+    
 }
