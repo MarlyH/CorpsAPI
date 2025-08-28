@@ -10,6 +10,9 @@ using CorpsAPI.Constants;
 using System.Data;
 using CorpsAPI.Data;
 using CorpsAPI.DTOs.Child;
+using QRCoder;
+using System.Net.Mime;
+
 
 namespace CorpsAPI.Controllers
 {
@@ -132,37 +135,77 @@ namespace CorpsAPI.Controllers
             await _context.SaveChangesAsync();
 
             // send confirmation email
+            // var emailBody = $@"
+            //     <p>Dear {user.UserName},</p>
+
+            //     <p>Thank you for your booking. Your reservation for the event below has been successfully confirmed:</p>
+
+            //     <ul>
+            //       <li><strong>Date:</strong> {eventEntity.StartDate:dddd, MMMM d, yyyy}</li>
+            //       <li><strong>Time:</strong> {eventEntity.StartTime:h:mm} - {eventEntity.EndTime:h:mm}</li>
+            //       <li><strong>Location:</strong> {eventEntity.Location?.Name ?? "TBA"}, {eventEntity.Address ?? "No address provided"}</li>
+            //       <li><strong>Seat Number:</strong> {dto.SeatNumber}</li>
+            //       <li><strong>Session Type:</strong> {eventEntity.SessionType}</li>
+            //     </ul>
+
+            //     <p>A QR code for entry is now linked to your booking. You can access it in the app to present it at the event entrance for checking in and out of the event.</p>
+
+            //     <p>We look forward to seeing you there!</p>
+
+            //     <p>Warm regards,<br />
+            //     The Your Corps Team</p>
+            //     ";
+
+            // // send email in background so we don't slow down the response
+            // _ = Task.Run(async () =>
+            // {
+            //     try
+            //     {
+            //         await _emailService.SendEmailAsync(user.Email!, "Booking Confirmation", emailBody);
+            //     }
+            //     catch 
+            //     { 
+            //         // TODO: implement logging
+            //     }
+
+            // <li><strong>Seat Number:</strong> {booking.SeatNumber}</li>
+
+            // });
+            var qrGen  = new QRCodeGenerator();
+            var qrData = qrGen.CreateQrCode(booking.QrCodeData, QRCodeGenerator.ECCLevel.Q);
+            var qrPng  = new PngByteQRCode(qrData);
+            byte[] qrBytes = qrPng.GetGraphic(10); // pixels per module
+
+            const string qrCid = "booking_qr";
+
             var emailBody = $@"
-                <p>Dear {user.UserName},</p>
+            <p>Dear {user.UserName},</p>
+            <p>Thank you for your booking. Your reservation has been confirmed:</p>
+            <ul>
+                <li><strong>Date:</strong> {eventEntity.StartDate:dddd, MMMM d, yyyy}</li>
+                <li><strong>Time:</strong> {eventEntity.StartTime:h\\:mm} - {eventEntity.EndTime:h\\:mm}</li>
+                <li><strong>Location:</strong> {eventEntity.Location?.Name ?? "TBA"}, {eventEntity.Address ?? "No address provided"}</li>
+                <li><strong>Session Type:</strong> {eventEntity.SessionType}</li>
+            </ul>
+            <p>Present this QR code at the entrance to check in/out:</p>
+            <p style=""text-align:center"">
+                <img src=""cid:{qrCid}"" alt=""Your Corps ticket QR"" width=""200"" height=""200"" />
+            </p>
+            <p>You can also view this ticket anytime in the app.</p>
+            <p>Warm regards,<br/>The Your Corps Team</p>
+            ";
 
-                <p>Thank you for your booking. Your reservation for the event below has been successfully confirmed:</p>
-
-                <ul>
-                  <li><strong>Date:</strong> {eventEntity.StartDate:dddd, MMMM d, yyyy}</li>
-                  <li><strong>Time:</strong> {eventEntity.StartTime:h:mm} - {eventEntity.EndTime:h:mm}</li>
-                  <li><strong>Location:</strong> {eventEntity.Location?.Name ?? "TBA"}, {eventEntity.Address ?? "No address provided"}</li>
-                  <li><strong>Seat Number:</strong> {dto.SeatNumber}</li>
-                  <li><strong>Session Type:</strong> {eventEntity.SessionType}</li>
-                </ul>
-
-                <p>A QR code for entry is now linked to your booking. You can access it in the app to present it at the event entrance for checking in and out of the event.</p>
-
-                <p>We look forward to seeing you there!</p>
-
-                <p>Warm regards,<br />
-                The Your Corps Team</p>
-                ";
-
-            // send email in background so we don't slow down the response
+            // Fire-and-forget to avoid slowing the response
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await _emailService.SendEmailAsync(user.Email!, "Booking Confirmation", emailBody);
+                    await _emailService.SendEmailWithInlineAsync(
+                        user.Email!, "Booking Confirmation", emailBody, qrBytes, qrCid, MediaTypeNames.Image.Png);
                 }
-                catch 
-                { 
-                    // TODO: implement logging
+                catch
+                {
+                    // TODO: log
                 }
             });
 
