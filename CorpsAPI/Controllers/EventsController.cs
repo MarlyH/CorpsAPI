@@ -105,42 +105,34 @@ namespace CorpsAPI.Controllers
         // GET: api/Events/manage
         [HttpGet("manage")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
-        public async Task<IActionResult> GetManageableEvents([FromQuery] string scope = "mine")
+        public async Task<IActionResult> GetManageableEvents()
         {
             var userId  = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var isAdmin = User.IsInRole(Roles.Admin);
 
-            IQueryable<Event> q = _context.Events.AsNoTracking()
+            IQueryable<Event> q = _context.Events
+                .AsNoTracking()
                 .Where(e => e.Status == EventStatus.Available);
 
-            if (isAdmin)
-            {
-                // Admin can choose: scope=all or scope=mine
-                if (!string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase))
-                    q = q.Where(e => e.EventManagerId == userId);
-            }
-            else
-            {
-                // EventManager sees only their own
+            // Admin sees ALL; EventManager sees ONLY their own
+            if (!isAdmin)
                 q = q.Where(e => e.EventManagerId == userId);
-            }
 
             var list = await q
                 .OrderBy(e => e.StartDate)
                 .Select(e => new {
                     e.EventId,
-                    LocationName = e.Location!.Name,
+                    LocationName = e.Location != null ? e.Location.Name : "",
                     e.StartDate,
                     e.StartTime,
                     e.EndTime,
                     e.SessionType,
                     e.SeatingMapImgSrc,
                     e.TotalSeats,
-                    AvailableSeatsCount = e.TotalSeats - _context.Bookings.Count(b =>
-                        b.EventId == e.EventId &&
+                    AvailableSeatsCount = e.TotalSeats - e.Bookings.Count(b =>
                         b.SeatNumber != null &&
                         b.Status != BookingStatus.Cancelled &&
-                        b.Status != BookingStatus.Striked) // keep status logic consistent
+                        b.Status != BookingStatus.Striked)
                 })
                 .ToListAsync();
 
