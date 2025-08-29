@@ -102,6 +102,50 @@ namespace CorpsAPI.Controllers
             return Ok(dto);
         }
 
+        // GET: api/Events/manage
+        [HttpGet("manage")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetManageableEvents([FromQuery] string scope = "mine")
+        {
+            var userId  = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var isAdmin = User.IsInRole(Roles.Admin);
+
+            IQueryable<Event> q = _context.Events.AsNoTracking()
+                .Where(e => e.Status == EventStatus.Available);
+
+            if (isAdmin)
+            {
+                // Admin can choose: scope=all or scope=mine
+                if (!string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase))
+                    q = q.Where(e => e.EventManagerId == userId);
+            }
+            else
+            {
+                // EventManager sees only their own
+                q = q.Where(e => e.EventManagerId == userId);
+            }
+
+            var list = await q
+                .OrderBy(e => e.StartDate)
+                .Select(e => new {
+                    e.EventId,
+                    LocationName = e.Location!.Name,
+                    e.StartDate,
+                    e.StartTime,
+                    e.EndTime,
+                    e.SessionType,
+                    e.SeatingMapImgSrc,
+                    e.TotalSeats,
+                    AvailableSeatsCount = e.TotalSeats - _context.Bookings.Count(b =>
+                        b.EventId == e.EventId &&
+                        b.SeatNumber != null &&
+                        b.Status != BookingStatus.Cancelled &&
+                        b.Status != BookingStatus.Striked) // keep status logic consistent
+                })
+                .ToListAsync();
+
+            return Ok(list);
+        }
 
         // POST: api/Events
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
@@ -169,7 +213,7 @@ namespace CorpsAPI.Controllers
         }
 
         [HttpPut("{id}/cancel")]
-        [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
+        [Authorize(Roles = $"{Roles.EventManager},{Roles.Admin}")]
         public async Task<IActionResult> CancelEvent(int id, [FromBody] CancelEventRequestDto dto, [FromServices] EmailService emailService)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -185,8 +229,9 @@ namespace CorpsAPI.Controllers
                 return NotFound(new { message = ErrorMessages.InvalidRequest });
 
             // Only the manager for the particular event or an admin should be able to cancel
-            if (ev.EventManagerId != userId || !User.IsInRole(Roles.Admin))
-                return BadRequest(new { message = ErrorMessages.EventCancelUnauthorised });
+            if (ev.EventManagerId != userId && !User.IsInRole(Roles.Admin))
+                return Forbid();
+
 
             // Cancel all associated bookings that aren't already cancelled
             foreach (var booking in ev.Bookings.Where(b => b.Status != BookingStatus.Cancelled))
