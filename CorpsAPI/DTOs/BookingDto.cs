@@ -38,6 +38,7 @@ namespace CorpsAPI.DTOs
         public int EventId { get; set; }
         public int SeatNumber { get; set; }
         public string? AttendeeName { get; set; } = null;
+        public string? PhoneNumber { get; set; } = null;
     }
     // for use in scanning qrcode in app
     public class ScanQrCodeDto { public string QrCodeData { get; set; } = default!; }

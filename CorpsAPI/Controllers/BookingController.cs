@@ -12,6 +12,7 @@ using CorpsAPI.Data;
 using CorpsAPI.DTOs.Child;
 using QRCoder;
 using System.Net.Mime;
+using System.Linq;
 
 
 namespace CorpsAPI.Controllers
@@ -178,9 +179,9 @@ namespace CorpsAPI.Controllers
             // <li><strong>Seat Number:</strong> {booking.SeatNumber}</li>
 
             // });
-            var qrGen  = new QRCodeGenerator();
+            var qrGen = new QRCodeGenerator();
             var qrData = qrGen.CreateQrCode(booking.QrCodeData, QRCodeGenerator.ECCLevel.Q);
-            var qrPng  = new PngByteQRCode(qrData);
+            var qrPng = new PngByteQRCode(qrData);
             byte[] qrBytes = qrPng.GetGraphic(10); // pixels per module
 
             const string qrCid = "booking_qr";
@@ -277,7 +278,7 @@ namespace CorpsAPI.Controllers
             // count active before we cancel
             var activeBefore = await _context.Bookings.CountAsync(b =>
                 b.EventId == ev.EventId &&
-                b.Status   != BookingStatus.Cancelled &&
+                b.Status != BookingStatus.Cancelled &&
                 b.SeatNumber != null);
             var wasFull = activeBefore >= ev.TotalSeats;
 
@@ -551,15 +552,32 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = $"Booking status manually updated to {dto.NewStatus}." });
         }
 
-
         [HttpPost("reserve")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
         public async Task<IActionResult> ReserveSeat([FromBody] ReserveSeatDto dto)
         {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return Unauthorized();
+            if (dto is null) return BadRequest(new { message = "Invalid payload." });
 
+            // Required fields
+            if (dto.SeatNumber <= 0)
+                return BadRequest(new { message = "SeatNumber must be >= 1." });
+            if (string.IsNullOrWhiteSpace(dto.AttendeeName))
+                return BadRequest(new { message = "AttendeeName is required." });
+            if (string.IsNullOrWhiteSpace(dto.PhoneNumber))
+                return BadRequest(new { message = "PhoneNumber is required." });
+
+            // Normalize/validate phone (simple sanitize)
+            var cleanedPhone = new string(dto.PhoneNumber.Trim()
+                .Where(c => char.IsDigit(c) || c == '+')
+                .ToArray());
+            if (cleanedPhone.Length < 7)
+                return BadRequest(new { message = "Invalid phone number." });
+
+            // Current user
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            // Event + current bookings
             var eventEntity = await _context.Events
                 .Include(e => e.Bookings)
                 .FirstOrDefaultAsync(e => e.EventId == dto.EventId);
@@ -567,43 +585,50 @@ namespace CorpsAPI.Controllers
             if (eventEntity == null || eventEntity.Status != EventStatus.Available)
                 return NotFound(new { message = "Event not found or not available." });
 
-            // event managers can only make reservations for their event but admins can do so for any event.
+            // Optional: seat bounds
+            if (dto.SeatNumber > eventEntity.TotalSeats)
+                return BadRequest(new { message = "Seat out of bounds." });
+
+            // Allow Admin OR the EventManager of this event
             var userRoles = await _userManager.GetRolesAsync(user);
-            if (!userRoles.Contains(Roles.Admin) || eventEntity.EventManagerId != user.Id)
+            if (!userRoles.Contains(Roles.Admin) && eventEntity.EventManagerId != user.Id)
                 return Forbid();
 
+            // Seat already taken? (ignore cancelled/striked)
             if (eventEntity.Bookings.Any(b =>
                 b.SeatNumber == dto.SeatNumber &&
                 b.Status != BookingStatus.Cancelled &&
                 b.Status != BookingStatus.Striked))
-                {
-                    return BadRequest(new { message = "Seat already taken." });
-                }
+            {
+                return BadRequest(new { message = "Seat already taken." });
+            }
 
-                var occupiedSeats = eventEntity.Bookings.Count(b =>
-                    b.SeatNumber != null &&
-                    b.Status != BookingStatus.Cancelled &&
-                    b.Status != BookingStatus.Striked);
+            // Capacity check (only active bookings with a seat)
+            var occupiedSeats = eventEntity.Bookings.Count(b =>
+                b.SeatNumber != null &&
+                b.Status != BookingStatus.Cancelled &&
+                b.Status != BookingStatus.Striked);
 
-                if (occupiedSeats >= eventEntity.TotalSeats)
-                    return BadRequest(new { message = "No seats available." });
+            if (occupiedSeats >= eventEntity.TotalSeats)
+                return BadRequest(new { message = "No seats available." });
 
-
+            // Create booking
             var booking = new Booking
             {
                 EventId = dto.EventId,
                 UserId = user.Id,
-                SeatNumber = dto.SeatNumber,
+                SeatNumber = dto.SeatNumber,                // int
                 Status = BookingStatus.Booked,
                 QrCodeData = Guid.NewGuid().ToString(),
                 ReservedBookingAttendeeName = dto.AttendeeName,
+                ReservedBookingPhone = cleanedPhone,        // store normalized phone
                 IsForChild = false
             };
 
             _context.Bookings.Add(booking);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Seat reserved successfully." });
+            return Ok(new { message = "Seat reserved successfully.", bookingId = booking.BookingId });
         }
     }
 }
