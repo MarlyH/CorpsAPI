@@ -12,6 +12,7 @@ using CorpsAPI.Data;
 using CorpsAPI.DTOs.Child;
 using QRCoder;
 using System.Net.Mime;
+using Microsoft.Data.SqlClient;
 using System.Linq;
 
 
@@ -558,77 +559,80 @@ namespace CorpsAPI.Controllers
         {
             if (dto is null) return BadRequest(new { message = "Invalid payload." });
 
-            // Required fields
-            if (dto.SeatNumber <= 0)
-                return BadRequest(new { message = "SeatNumber must be >= 1." });
-            if (string.IsNullOrWhiteSpace(dto.AttendeeName))
-                return BadRequest(new { message = "AttendeeName is required." });
-            if (string.IsNullOrWhiteSpace(dto.PhoneNumber))
-                return BadRequest(new { message = "PhoneNumber is required." });
+            if (dto.SeatNumber <= 0) return BadRequest(new { message = "SeatNumber must be >= 1." });
+            if (string.IsNullOrWhiteSpace(dto.AttendeeName)) return BadRequest(new { message = "AttendeeName is required." });
+            if (string.IsNullOrWhiteSpace(dto.PhoneNumber)) return BadRequest(new { message = "PhoneNumber is required." });
 
-            // Normalize/validate phone (simple sanitize)
             var cleanedPhone = new string(dto.PhoneNumber.Trim()
-                .Where(c => char.IsDigit(c) || c == '+')
-                .ToArray());
+                .Where(c => char.IsDigit(c) || c == '+').ToArray());
             if (cleanedPhone.Length < 7)
                 return BadRequest(new { message = "Invalid phone number." });
 
-            // Current user
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            // Event + current bookings
-            var eventEntity = await _context.Events
+            var ev = await _context.Events
                 .Include(e => e.Bookings)
                 .FirstOrDefaultAsync(e => e.EventId == dto.EventId);
 
-            if (eventEntity == null || eventEntity.Status != EventStatus.Available)
+            if (ev == null || ev.Status != EventStatus.Available)
                 return NotFound(new { message = "Event not found or not available." });
 
-            // Optional: seat bounds
-            if (dto.SeatNumber > eventEntity.TotalSeats)
+            if (dto.SeatNumber > ev.TotalSeats)
                 return BadRequest(new { message = "Seat out of bounds." });
 
-            // Allow Admin OR the EventManager of this event
-            var userRoles = await _userManager.GetRolesAsync(user);
-            if (!userRoles.Contains(Roles.Admin) && eventEntity.EventManagerId != user.Id)
+            var roles = await _userManager.GetRolesAsync(user);
+            if (!roles.Contains(Roles.Admin) && ev.EventManagerId != user.Id)
                 return Forbid();
 
-            // Seat already taken? (ignore cancelled/striked)
-            if (eventEntity.Bookings.Any(b =>
-                b.SeatNumber == dto.SeatNumber &&
-                b.Status != BookingStatus.Cancelled &&
-                b.Status != BookingStatus.Striked))
+            // Safety check (app-level) – ignore cancelled/striked
+            if (ev.Bookings.Any(b =>
+                    b.SeatNumber == dto.SeatNumber &&
+                    b.Status != BookingStatus.Cancelled &&
+                    b.Status != BookingStatus.Striked))
             {
                 return BadRequest(new { message = "Seat already taken." });
             }
 
-            // Capacity check (only active bookings with a seat)
-            var occupiedSeats = eventEntity.Bookings.Count(b =>
+            var occupied = ev.Bookings.Count(b =>
                 b.SeatNumber != null &&
                 b.Status != BookingStatus.Cancelled &&
                 b.Status != BookingStatus.Striked);
-
-            if (occupiedSeats >= eventEntity.TotalSeats)
+            if (occupied >= ev.TotalSeats)
                 return BadRequest(new { message = "No seats available." });
 
-            // Create booking
             var booking = new Booking
             {
                 EventId = dto.EventId,
                 UserId = user.Id,
-                SeatNumber = dto.SeatNumber,                // int
+                SeatNumber = dto.SeatNumber,
                 Status = BookingStatus.Booked,
                 QrCodeData = Guid.NewGuid().ToString(),
                 ReservedBookingAttendeeName = dto.AttendeeName,
-                ReservedBookingPhone = cleanedPhone,        // store normalized phone
+                ReservedBookingPhone = cleanedPhone,
                 IsForChild = false
             };
 
             _context.Bookings.Add(booking);
-            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException sql &&
+                                            (sql.Number == 2627 || sql.Number == 2601))
+            {
+                // Unique constraint violation (likely on EventId + SeatNumber)
+                return Conflict(new { message = "Seat already taken (database constraint)." });
+            }
+            catch (DbUpdateException ex)
+            {
+                // Surface a clearer message in non-prod; keep generic in prod
+                return StatusCode(500, new { message = "Failed to reserve seat.", detail = ex.Message });
+            }
 
             return Ok(new { message = "Seat reserved successfully.", bookingId = booking.BookingId });
         }
+
     }
 }
