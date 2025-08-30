@@ -22,6 +22,7 @@ namespace CorpsAPI.Models
         [ForeignKey("ChildId")]
         public Child? Child { get; set; }
         public string? ReservedBookingAttendeeName { get; set; } = null;
+        public string? ReservedBookingParentGuardianName { get; set;} = null;
         public string? ReservedBookingPhone { get; set; }
     }
 

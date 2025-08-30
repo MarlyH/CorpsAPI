@@ -60,19 +60,14 @@ public class BookingAdminController : ControllerBase
         };
 
         // A booking is considered a "reservation" if these fields are set.
-        bool isReserved = !string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName)
-                        || !string.IsNullOrWhiteSpace(b.ReservedBookingPhone);
+        var isReserved = !string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName)
+                 || !string.IsNullOrWhiteSpace(b.ReservedBookingPhone);
 
-        // Choose the attendee name to show: prefer reserved name when present.
         var effectiveAttendeeName =
             isReserved ? (b.ReservedBookingAttendeeName ?? "Reserved attendee")
             : b.IsForChild
-                ? (b.Child != null
-                    ? $"{b.Child.FirstName} {b.Child.LastName}"
-                    : "Child")
-                : (b.User != null
-                    ? $"{b.User.FirstName} {b.User.LastName}"
-                    : "User");
+                ? (b.Child != null ? $"{b.Child.FirstName} {b.Child.LastName}" : "Child")
+                : (b.User != null ? $"{b.User.FirstName} {b.User.LastName}" : "User");
 
         var dto = new
         {
@@ -86,9 +81,11 @@ public class BookingAdminController : ControllerBase
             qrCodeData = b.QrCodeData,
             isForChild = b.IsForChild,
 
+            // Reservation extras
             isReserved,
             reservedAttendeeName = b.ReservedBookingAttendeeName,
             reservedPhone = b.ReservedBookingPhone,
+            reservedGuardianName = b.ReservedBookingParentGuardianName, // ← NEW
 
             attendeeName = effectiveAttendeeName,
 
@@ -97,6 +94,7 @@ public class BookingAdminController : ControllerBase
         };
 
         return Ok(dto);
+
     }
 
 

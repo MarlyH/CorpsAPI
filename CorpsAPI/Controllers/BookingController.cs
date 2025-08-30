@@ -541,6 +541,11 @@ namespace CorpsAPI.Controllers
             if (cleanedPhone.Length < 7)
                 return BadRequest(new { message = "Invalid phone number." });
 
+            // NEW: if cannot be left alone, require Parent/Guardian name
+            var guardianName = dto.ReservedBookingParentGuardianName?.Trim();
+            if (!dto.CanBeLeftAlone && string.IsNullOrWhiteSpace(guardianName))
+                return BadRequest(new { message = "Parent/Guardian name is required when attendee cannot be left alone." });
+
             // Current user
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
@@ -588,9 +593,13 @@ namespace CorpsAPI.Controllers
                 SeatNumber = dto.SeatNumber,
                 Status = BookingStatus.Booked,
                 QrCodeData = Guid.NewGuid().ToString(),
-                ReservedBookingAttendeeName = dto.AttendeeName,
+                IsForChild = false,
+
+                // Reservation fields
+                ReservedBookingAttendeeName = dto.AttendeeName?.Trim(),
                 ReservedBookingPhone = cleanedPhone,
-                IsForChild = false
+                CanBeLeftAlone = dto.CanBeLeftAlone,
+                ReservedBookingParentGuardianName = dto.CanBeLeftAlone ? null : guardianName
             };
 
             _context.Bookings.Add(booking);
@@ -598,5 +607,6 @@ namespace CorpsAPI.Controllers
 
             return Ok(new { message = "Seat reserved successfully.", bookingId = booking.BookingId });
         }
+
     }
 }
