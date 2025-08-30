@@ -19,6 +19,8 @@ public class BookingAdminController : ControllerBase
 
     // GET: /api/BookingAdmin/detail/{bookingId}
     // Returns booking + (optional) child dto + light user info for admins/event managers.
+    // using System; // if you need it for string checks
+
     [HttpGet("detail/{bookingId:int}")]
     [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
     public async Task<IActionResult> GetBookingDetailForAdmin(int bookingId)
@@ -57,6 +59,21 @@ public class BookingAdminController : ControllerBase
             isSuspended = b.User.IsSuspended
         };
 
+        // A booking is considered a "reservation" if these fields are set.
+        bool isReserved = !string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName)
+                        || !string.IsNullOrWhiteSpace(b.ReservedBookingPhone);
+
+        // Choose the attendee name to show: prefer reserved name when present.
+        var effectiveAttendeeName =
+            isReserved ? (b.ReservedBookingAttendeeName ?? "Reserved attendee")
+            : b.IsForChild
+                ? (b.Child != null
+                    ? $"{b.Child.FirstName} {b.Child.LastName}"
+                    : "Child")
+                : (b.User != null
+                    ? $"{b.User.FirstName} {b.User.LastName}"
+                    : "User");
+
         var dto = new
         {
             bookingId = b.BookingId,
@@ -68,19 +85,20 @@ public class BookingAdminController : ControllerBase
             canBeLeftAlone = b.CanBeLeftAlone,
             qrCodeData = b.QrCodeData,
             isForChild = b.IsForChild,
-            attendeeName = b.IsForChild
-                ? (b.Child != null
-                    ? $"{b.Child.FirstName} {b.Child.LastName}"
-                    : (b.ReservedBookingAttendeeName ?? "Child"))
-                : (b.User != null
-                    ? $"{b.User.FirstName} {b.User.LastName}"
-                    : "User"),
+
+            isReserved,
+            reservedAttendeeName = b.ReservedBookingAttendeeName,
+            reservedPhone = b.ReservedBookingPhone,
+
+            attendeeName = effectiveAttendeeName,
+
             user = userMini,
             child = childDto
         };
 
         return Ok(dto);
     }
+
 
     private static int CalculateAge(DateOnly dob)
     {

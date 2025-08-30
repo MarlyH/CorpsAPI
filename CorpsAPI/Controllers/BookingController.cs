@@ -315,38 +315,6 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = "Booking successfully cancelled." });
         }
 
-        //this is a depreciated scan in/out toggle 
-
-        // [HttpPost("scan")]
-        // [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
-        // public async Task<IActionResult> ScanQrCode([FromBody] ScanQrCodeDto dto)
-        // {
-        //     var booking = await _context.Bookings
-        //         .Include(b => b.Event)
-        //         .FirstOrDefaultAsync(b => b.QrCodeData == dto.QrCodeData);
-
-        //     if (booking == null)
-        //         return NotFound(new { message = "Invalid QR code." });
-
-        //     switch (booking.Status)
-        //     {
-        //         case BookingStatus.Booked:
-        //             booking.Status = BookingStatus.CheckedIn;
-        //             break;
-        //         case BookingStatus.CheckedIn:
-        //             booking.Status = BookingStatus.CheckedOut;
-        //             break;
-        //         case BookingStatus.CheckedOut:
-        //             return BadRequest(new { message = "Booking already checked out." });
-        //         default:
-        //             return BadRequest(new { message = "Unknown booking status." });
-        //     }
-
-        //     await _context.SaveChangesAsync();
-
-        //     return Ok(new { message = $"Booking status updated."  });
-        // }
-
         [HttpPost("scan-info")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
         public async Task<IActionResult> ScanInfo([FromBody] ScanQrCodeDto dto)
@@ -617,11 +585,11 @@ namespace CorpsAPI.Controllers
             {
                 EventId = dto.EventId,
                 UserId = user.Id,
-                SeatNumber = dto.SeatNumber,                // int
+                SeatNumber = dto.SeatNumber,
                 Status = BookingStatus.Booked,
                 QrCodeData = Guid.NewGuid().ToString(),
                 ReservedBookingAttendeeName = dto.AttendeeName,
-                ReservedBookingPhone = cleanedPhone,        // store normalized phone
+                ReservedBookingPhone = cleanedPhone,
                 IsForChild = false
             };
 
