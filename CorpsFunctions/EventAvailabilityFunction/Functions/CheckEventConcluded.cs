@@ -26,68 +26,68 @@ public class CheckEventConcluded
 
         using var context = new AppDbContext(optionsBuilder.Options);
 
-        var nzTimeZone = TimeZoneInfo.FindSystemTimeZoneById("New Zealand Standard Time");
-        var todayNz = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, nzTimeZone));
+        // Time zone (Windows & Linux safe)
+        TimeZoneInfo nzTz;
+        try { nzTz = TimeZoneInfo.FindSystemTimeZoneById("New Zealand Standard Time"); }
+        catch { nzTz = TimeZoneInfo.FindSystemTimeZoneById("Pacific/Auckland"); }
 
-        // Conclude any event whose StartDate is strictly before "today" in NZT
+        var todayNz = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, nzTz));
+
         var eventsToUpdate = await context.Events
-            .Where(e => e.StartDate < todayNz && e.Status == EventStatus.Available)
-            .Include(e => e.Bookings)
-                .ThenInclude(b => b.User)
-            .ToListAsync();
+        .Where(e => e.StartDate < todayNz && e.Status == EventStatus.Available)
+        .Include(e => e.Bookings).ThenInclude(b => b.User)
+        .ToListAsync();
 
         foreach (var ev in eventsToUpdate)
         {
-            // Unattended = never cancelled/striked/checked out.
-            // We strike both Booked (never arrived) and CheckedIn (arrived but never checked out).
-            var unattendedBookings = ev.Bookings
-                .Where(b =>
-                    (b.Status == BookingStatus.Booked || b.Status == BookingStatus.CheckedIn))
-                .ToList();
+        var unattended = ev.Bookings
+            .Where(b => b.Status == BookingStatus.Booked || b.Status == BookingStatus.CheckedIn)
+            .ToList();
 
-            if (unattendedBookings.Count == 0)
+        // Mark all unattended bookings as Striked
+        foreach (var b in unattended)
+        {
+            b.Status = BookingStatus.Striked;
+            b.SeatNumber = null;
+        }
+
+        // Users to penalize (skip reservations/null users)
+        var penalizableUserIds = unattended
+            .Where(b => string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName) && b.User != null)
+            .Select(b => b.User!.Id)
+            .Distinct()
+            .ToList();
+
+        // Optional: avoid double-penalizing if this event already produced strikes
+        var alreadyStrikedUserIds = ev.Bookings
+            .Where(b => b.Status == BookingStatus.Striked && b.User != null)
+            .Select(b => b.User!.Id)
+            .Distinct()
+            .ToHashSet();
+
+        penalizableUserIds = penalizableUserIds
+            .Where(id => !alreadyStrikedUserIds.Contains(id))
+            .ToList();
+
+        // Load users and increment once each
+        if (penalizableUserIds.Count > 0)
+        {
+            var users = await context.Users
+            .Where(u => penalizableUserIds.Contains(u.Id))
+            .ToListAsync();
+
+            foreach (var u in users)
             {
-                ev.Status = EventStatus.Concluded;
-                continue;
+            u.AttendanceStrikeCount++;
+            u.DateOfLastStrike = todayNz;
             }
+        }
 
-            // 1) Mark ALL unattended bookings as Striked (including reservations & null-user)
-            foreach (var booking in unattendedBookings)
-            {
-                booking.Status = BookingStatus.Striked;
-                booking.SeatNumber = null; // free the seat
-            }
-
-            // 2) Compute which USERS to penalize:
-            //    - Skip reservations (ReservedBookingAttendeeName is set) so staff accounts aren't penalized.
-            //    - Skip null users (defensive).
-            //    - Group by UserId so a parent with many no-show children gets ONLY ONE strike for this event.
-            var penalizableUserIds = unattendedBookings
-                .Where(b => string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName) && b.User != null)
-                .Select(b => b.User!.Id)
-                .Distinct()
-                .ToList();
-
-            if (penalizableUserIds.Count > 0)
-            {
-                // Load only the affected users attached to those unattended bookings
-                var usersToPenalize = unattendedBookings
-                    .Where(b => b.User != null && penalizableUserIds.Contains(b.User!.Id))
-                    .Select(b => b.User!)
-                    .Distinct()
-                    .ToList();
-
-                foreach (var user in usersToPenalize)
-                {
-                    user.AttendanceStrikeCount++;
-                    user.DateOfLastStrike = todayNz;
-                }
-            }
-
-            ev.Status = EventStatus.Concluded;
+        ev.Status = EventStatus.Concluded;
         }
 
         await context.SaveChangesAsync();
+
 
         _logger.LogInformation($"Concluded {eventsToUpdate.Count} events and applied strikes where applicable.");
     }
