@@ -31,7 +31,7 @@ namespace CorpsAPI.Models
         public List<Waitlist> Waitlists { get; set; } = new();
         [NotMapped]
         public int AvailableSeats { get { return TotalSeats - (Bookings?.Count(b => b.Status != BookingStatus.Cancelled) ?? 0); } }
-        [MaxLength(500)]
+        // [MaxLength(500)]
         public string? Description { get; set; }
         [MaxLength(100)]
         public string? Address { get; set; }

@@ -12,7 +12,7 @@ namespace CorpsAPI.DTOs
         public TimeOnly EndTime { get; set; }
         public DateOnly AvailableDate { get; set; }
         public int TotalSeats { get; set; }
-        [MaxLength(500)]
+        // [MaxLength(500)]
         public string? Description { get; set; }
         [MaxLength(100)]
         public string? Address { get; set; }
