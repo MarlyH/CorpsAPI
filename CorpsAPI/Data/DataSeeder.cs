@@ -61,6 +61,7 @@ namespace CorpsAPI.Data
                     new Location { Name = "Te Anau", MascotImgSrc = null },
                     new Location { Name = "Gore", MascotImgSrc = null },
                     new Location { Name = "Riverton", MascotImgSrc = null },
+                    new Location { Name = "Balclutha", MascotImgSrc = null }
                 };
 
                 context.Locations.AddRange(locations);
