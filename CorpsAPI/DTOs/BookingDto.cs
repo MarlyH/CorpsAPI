@@ -63,6 +63,7 @@ namespace CorpsAPI.DTOs
     {
         public string Id { get; set; } = default!;
         public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
         public string FirstName { get; set; } = default!;
         public string LastName { get; set; } = default!;
         public int AttendanceStrikeCount { get; set; }

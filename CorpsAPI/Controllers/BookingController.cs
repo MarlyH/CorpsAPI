@@ -365,6 +365,7 @@ namespace CorpsAPI.Controllers
                 {
                     Id = booking.User.Id,
                     Email = booking.User.Email,
+                    PhoneNumber = booking.User.PhoneNumber,
                     FirstName = booking.User.FirstName,
                     LastName = booking.User.LastName,
                     AttendanceStrikeCount = booking.User.AttendanceStrikeCount,
