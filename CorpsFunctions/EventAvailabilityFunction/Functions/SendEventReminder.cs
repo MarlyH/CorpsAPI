@@ -50,11 +50,14 @@ public class SendEventReminder
             {
                 try
                 {
-                    await _notificationService.SendCrossPlatformNotificationAsync(booking.UserId!, "event reminder", "test");
+                    string title = $"Reminder: {ev.SessionType} session starting soon!";
+                    string message = $"Your event at {ev.StartTime:hh\\:mm} on {ev.StartDate:dd MMM yyyy} at {ev.Address ?? "your location"} is coming up. Don't be late!";
+
+                    await _notificationService.SendCrossPlatformNotificationAsync(booking.UserId!, title, message);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex.Message);
+                    _logger.LogError($"Failed to send notification to user {booking.UserId}: {ex.Message}");
                 }
             }
             ev.IsReminded = true;
