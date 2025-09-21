@@ -36,6 +36,21 @@ namespace CorpsAPI.Controllers
             if (user == null)
                 return NotFound(new { message = ErrorMessages.InvalidRequest });
 
+            // Trigger auto-clear side-effect if 90 days passed
+            var isSuspended = user.IsSuspended;
+            if (!isSuspended && user.AttendanceStrikeCount == 0 && user.DateOfLastStrike == null)
+            {
+                // persist cleared state, in case IsSuspended reset strikes
+                await _userManager.UpdateAsync(user);
+            }
+
+            DateTime? suspensionUntil = null;
+            if (isSuspended && user.DateOfLastStrike is not null)
+            {
+                var until = user.DateOfLastStrike.Value.ToDateTime(TimeOnly.MinValue).AddDays(90);
+                if (until.Date > DateTime.Today) suspensionUntil = until.Date;
+            }
+
             var dto = new UserProfileDto
             {
                 UserName = user.UserName!,
@@ -45,8 +60,10 @@ namespace CorpsAPI.Controllers
                 Age = user.Age,
                 IsSuspended = user.IsSuspended,
                 AttendanceStrikeCount = user.AttendanceStrikeCount,
-                PhoneNumber = user.PhoneNumber
+                PhoneNumber = user.PhoneNumber,
+                SuspensionUntil = suspensionUntil
             };
+
             return Ok(dto);
         }
 

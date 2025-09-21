@@ -10,5 +10,6 @@
         public bool IsSuspended { get; set; } = false;
         public int AttendanceStrikeCount { get; set; }
         public string PhoneNumber { get; set; } = default!;
+        public DateTime? SuspensionUntil { get; set; }
     }
 }
