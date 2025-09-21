@@ -34,13 +34,44 @@ namespace CorpsAPI.Controllers
             _notificationService = notificationService;
         }
 
+
+        private static DateTime? GetSuspendedUntil(AppUser user)
+        {
+            // If there’s no recorded strike date, we can’t compute an until date.
+            if (user.DateOfLastStrike is null) return null;
+
+            // 90-day suspension from last strike date (stored as DateOnly).
+            var until = user.DateOfLastStrike.Value.ToDateTime(TimeOnly.MinValue).AddDays(90);
+
+            // If already expired, return null so the caller knows it’s no longer active.
+            return until.Date > DateTime.Today ? until.Date : (DateTime?)null;
+        }
+
         [HttpPost]
         [Authorize(Roles = $"{Roles.User},{Roles.Admin},{Roles.EventManager},{Roles.Staff}")]
         public async Task<IActionResult> CreateBooking([FromBody] CreateBookingDto dto)
         {
+            
             var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-                return Unauthorized();
+            if (user == null) return Unauthorized();
+
+            // Trigger the computed property (it may auto-clear if 90+ days elapsed).
+            var suspended = user.IsSuspended;
+
+            if (suspended || user.AttendanceStrikeCount >= 3)
+            {
+                var until = GetSuspendedUntil(user);
+                // Return a JSON payload with the ban-until date.
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = until is not null
+                        ? $"Your account is suspended until {until:yyyy-MM-dd}. You cannot book events."
+                        : "Your account is suspended. You cannot book events.",
+                    suspensionUntil = until?.ToString("yyyy-MM-dd"),
+                    strikes = user.AttendanceStrikeCount
+                });
+            }
+
 
             var eventEntity = await _context.Events
                 .Include(e => e.Bookings)

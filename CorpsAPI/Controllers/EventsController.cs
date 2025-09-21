@@ -269,6 +269,18 @@ namespace CorpsAPI.Controllers
             return Ok(waitlist);
         }
 
+        private static DateTime? GetSuspendedUntil(AppUser user)
+        {
+            // If there’s no recorded strike date, we can’t compute an until date.
+            if (user.DateOfLastStrike is null) return null;
+
+            // 90-day suspension from last strike date (stored as DateOnly).
+            var until = user.DateOfLastStrike.Value.ToDateTime(TimeOnly.MinValue).AddDays(90);
+
+            // If already expired, return null so the caller knows it’s no longer active.
+            return until.Date > DateTime.Today ? until.Date : (DateTime?)null;
+        }
+
         [HttpPost("{eventId}/waitlist")]
         [Authorize]
         public async Task<IActionResult> AddToWaitlist(int eventId)
@@ -276,6 +288,23 @@ namespace CorpsAPI.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user is null) return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var suspended = user.IsSuspended;
+            if (suspended || user.AttendanceStrikeCount >= 3)
+            {
+                var until = GetSuspendedUntil(user);
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = until is not null
+                        ? $"Your account is suspended until {until:yyyy-MM-dd}. You cannot join waitlists."
+                        : "Your account is suspended. You cannot join waitlists.",
+                    suspensionUntil = until?.ToString("yyyy-MM-dd"),
+                    strikes = user.AttendanceStrikeCount
+                });
+            }
 
             var already = await _context.Waitlists.AnyAsync(w => w.EventId == eventId && w.UserId == userId);
             if (already) return BadRequest(new { message = ErrorMessages.AlreadyOnWaitlist });
