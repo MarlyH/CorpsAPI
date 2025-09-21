@@ -14,6 +14,7 @@ namespace CorpsAPI.Models
         public List<Event> ManagedEvents { get; set; } = new();
         public List<Child> Children { get; set; } = new();
         public List<Waitlist> Waitlists { get; set; } = new();
+        public new string PhoneNumber { get; set; } = default!;
 
         [NotMapped]
         public bool IsSuspended

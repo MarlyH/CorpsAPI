@@ -18,5 +18,7 @@ namespace CorpsAPI.DTOs.Auth
         public string LastName { get; set; } = default!;
         [Required]
         public DateOnly DateOfBirth { get; set; }
+        [Required]
+        public string PhoneNumber { get; set; } = default!;
     }
 }

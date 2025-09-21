@@ -268,6 +268,7 @@ namespace CorpsAPI.Controllers
                     Email = u.Email ?? string.Empty,
                     FirstName = u.FirstName,
                     LastName = u.LastName,
+                    PhoneNumber = u.PhoneNumber ?? string.Empty,
                     Roles = roles.ToList(),
                     AttendanceStrikeCount = u.AttendanceStrikeCount,
                     DateOfLastStrike = u.DateOfLastStrike,
@@ -392,6 +393,7 @@ namespace CorpsAPI.Controllers
                     email = user.Email,
                     firstName = user.FirstName,
                     lastName = user.LastName,
+                    phoneNumber = user.PhoneNumber,
                     attendanceStrikeCount = user.AttendanceStrikeCount,
                     dateOfLastStrike = user.DateOfLastStrike,
                     isSuspended = user.IsSuspended

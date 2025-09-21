@@ -47,13 +47,14 @@ namespace CorpsAPI.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
-            var user = new AppUser 
-            { 
-                UserName = dto.UserName, 
+            var user = new AppUser
+            {
+                UserName = dto.UserName,
                 Email = dto.Email,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 DateOfBirth = dto.DateOfBirth,
+                PhoneNumber = dto.PhoneNumber
             };
 
             // Check for duplicate email

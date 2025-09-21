@@ -52,6 +52,7 @@ public class BookingAdminController : ControllerBase
         {
             id = b.User.Id,
             email = b.User.Email,
+            phoneNumber = b.User.PhoneNumber,
             firstName = b.User.FirstName,
             lastName = b.User.LastName,
             attendanceStrikeCount = b.User.AttendanceStrikeCount,

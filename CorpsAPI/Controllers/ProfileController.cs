@@ -70,6 +70,7 @@ namespace CorpsAPI.Controllers
             // Change first/last name if provided
             user.FirstName = dto.NewFirstName ?? user.FirstName;
             user.LastName  = dto.NewLastName  ?? user.LastName;
+            user.PhoneNumber = dto.NewPhoneNumber ?? user.PhoneNumber;
 
             var result = await _userManager.UpdateAsync(user);
             if (!result.Succeeded)
