@@ -169,6 +169,7 @@ namespace CorpsAPI.Controllers
                     {
                         Id = u.Id,
                         Email = u.Email!,
+                        PhoneNumber = u.PhoneNumber,
                         FirstName = u.FirstName,
                         LastName = u.LastName,
                         AttendanceStrikeCount = u.AttendanceStrikeCount,
@@ -222,6 +223,7 @@ namespace CorpsAPI.Controllers
                 {
                     Id = u.Id,
                     Email = u.Email ?? string.Empty,
+                    PhoneNumber = u.PhoneNumber ?? string.Empty,
                     FirstName = u.FirstName,
                     LastName = u.LastName
                 })
