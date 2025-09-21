@@ -44,7 +44,8 @@ namespace CorpsAPI.Controllers
                 Email = user.Email!,
                 Age = user.Age,
                 IsSuspended = user.IsSuspended,
-                AttendanceStrikeCount = user.AttendanceStrikeCount
+                AttendanceStrikeCount = user.AttendanceStrikeCount,
+                PhoneNumber = user.PhoneNumber
             };
             return Ok(dto);
         }
