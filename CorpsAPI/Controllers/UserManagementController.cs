@@ -287,6 +287,37 @@ namespace CorpsAPI.Controllers
             return Ok(results);
         }
 
+        [HttpGet("user/{userId}/medical")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetUserMedical(string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return BadRequest(new { message = "UserId is required." });
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user is null)
+                return NotFound(new { message = "User not found." });
+
+            var meds = await _context.UserMedicalConditions
+                .AsNoTracking()
+                .Where(m => m.UserId == user.Id)
+                .OrderByDescending(m => m.IsAllergy).ThenBy(m => m.Name)
+                .Select(m => new DTOs.MedicalConditionDto
+                {
+                    Id = m.Id,
+                    Name = m.Name,
+                    Notes = m.Notes,
+                    IsAllergy = m.IsAllergy
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                hasMedicalConditions = meds.Count > 0,
+                medicalConditions = meds
+            });
+        }
+
         // GET: /api/UserManagement/user/{userId}/children
         [HttpGet("user/{userId}/children")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
@@ -295,7 +326,6 @@ namespace CorpsAPI.Controllers
             if (string.IsNullOrWhiteSpace(userId))
                 return BadRequest(new { message = "UserId is required." });
 
-            // Load user with children in one query
             var user = await _userManager.Users
                 .Include(u => u.Children)
                 .FirstOrDefaultAsync(u => u.Id == userId);
@@ -303,22 +333,51 @@ namespace CorpsAPI.Controllers
             if (user is null)
                 return NotFound(new { message = "User not found." });
 
+            var childIds = user.Children.Select(c => c.ChildId).ToList();
+
+            // Pull all medical for these children in one query
+            var childMedLookup = await _context.ChildMedicalConditions
+                .AsNoTracking()
+                .Where(m => childIds.Contains(m.ChildId))
+                .OrderByDescending(m => m.IsAllergy).ThenBy(m => m.Name)
+                .GroupBy(m => m.ChildId)
+                .ToDictionaryAsync(
+                    g => g.Key,
+                    g => g.Select(m => new DTOs.MedicalConditionDto
+                    {
+                        Id = m.Id,
+                        Name = m.Name,
+                        Notes = m.Notes,
+                        IsAllergy = m.IsAllergy
+                    }).ToList()
+                );
+
             var result = user.Children
                 .OrderBy(c => c.LastName).ThenBy(c => c.FirstName)
-                .Select(c => new DTOs.Child.ChildDto
+                .Select(c =>
                 {
-                    ChildId = c.ChildId,
-                    FirstName = c.FirstName,
-                    LastName  = c.LastName,
-                    DateOfBirth = c.DateOfBirth,
-                    EmergencyContactName = c.EmergencyContactName,
-                    EmergencyContactPhone = c.EmergencyContactPhone,
-                    Age = CalculateAge(c.DateOfBirth)
+                    childMedLookup.TryGetValue(c.ChildId, out var meds);
+                    meds ??= new List<DTOs.MedicalConditionDto>();
+                    return new DTOs.Child.ChildDto
+                    {
+                        ChildId = c.ChildId,
+                        FirstName = c.FirstName,
+                        LastName = c.LastName,
+                        DateOfBirth = c.DateOfBirth,
+                        EmergencyContactName = c.EmergencyContactName,
+                        EmergencyContactPhone = c.EmergencyContactPhone,
+                        Age = CalculateAge(c.DateOfBirth),
+
+                        // NEW:
+                        HasMedicalConditions = meds.Count > 0,
+                        MedicalConditions = meds
+                    };
                 })
                 .ToList();
 
             return Ok(result);
         }
+
 
         private static int CalculateAge(DateOnly dob)
         {
