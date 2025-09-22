@@ -111,9 +111,10 @@ namespace CorpsAPI.Controllers
                 var rows = dto.MedicalConditions
                     .Select(m => new UserMedicalCondition
                     {
-                        UserId    = user.Id,
+                        UserId = user.Id,
                         Name = m.Name.Trim(),
-                        Notes     = string.IsNullOrWhiteSpace(m.Notes) ? null : m.Notes!.Trim()
+                        Notes = string.IsNullOrWhiteSpace(m.Notes) ? null : m.Notes!.Trim(),
+                        IsAllergy = m.IsAllergy   
                     })
                     // de-dup by name if you want:
                     .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)

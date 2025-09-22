@@ -25,7 +25,8 @@ namespace CorpsAPI.DTOs.Auth
     }
     public class MedicalConditionDto
     {
-        public string Name  { get; set; } = default!;
+        public string Name { get; set; } = default!;
         public string? Notes { get; set; }
+        public bool IsAllergy { get; set; }
     }
 }
