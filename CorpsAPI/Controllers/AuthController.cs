@@ -133,8 +133,22 @@ namespace CorpsAPI.Controllers
             var encodedToken = WebUtility.UrlEncode(token);
             var serverUrl = _configuration["ServerUrl"];
             var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
-            await _emailService.SendEmailAsync(user.Email, "Verify your email",
-                $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
+            var appName = "Your Corps";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+
+            var htmlBody = EmailTemplates.ConfirmEmailHtml(
+                appName: appName,
+                confirmationUrl: confirmationUrl,
+                logoUrl: logoUrl,
+                supportEmail: "yourcorps@yourcorps.co.nz"
+            );
+
+            // Make sure your EmailService sends HTML (add a boolean if needed)
+            await _emailService.SendEmailAsync(
+                user.Email,
+                $"{appName} – Verify your email",
+                htmlBody
+            );
 
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
@@ -273,8 +287,21 @@ namespace CorpsAPI.Controllers
             var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // send email
-            await _emailService.SendEmailAsync(user.Email, "Verify your email",
-                $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
+            var appName = "Your Corps";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+
+            var htmlBody = EmailTemplates.ConfirmEmailHtml(
+                appName: appName,
+                confirmationUrl: confirmationUrl,
+                logoUrl: logoUrl,
+                supportEmail: "yourcorps@yourcorps.co.nz"
+            );
+
+            await _emailService.SendEmailAsync(
+                user.Email,
+                $"{appName} – Verify your email",
+                htmlBody
+            );
 
             // store in memory, only one email every five minutes per user.
             _memoryCache.Set($"resend:{user.Email}", true, TimeSpan.FromMinutes(5));
