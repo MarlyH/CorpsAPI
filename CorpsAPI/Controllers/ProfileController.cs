@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using CorpsAPI.Constants;
 using CorpsAPI.Data;
 using CorpsAPI.DTOs.Profile;
+using CorpsAPI.DTOs;
 using CorpsAPI.Models;
 
 namespace CorpsAPI.Controllers
@@ -18,12 +19,12 @@ namespace CorpsAPI.Controllers
     public class ProfileController : ControllerBase
     {
         private readonly UserManager<AppUser> _userManager;
-        private readonly AppDbContext       _context;
+        private readonly AppDbContext _context;
 
         public ProfileController(UserManager<AppUser> userManager, AppDbContext context)
         {
             _userManager = userManager;
-            _context     = context;
+            _context = context;
         }
 
         /// <summary>
@@ -87,7 +88,7 @@ namespace CorpsAPI.Controllers
 
             // Change first/last name if provided
             user.FirstName = dto.NewFirstName ?? user.FirstName;
-            user.LastName  = dto.NewLastName  ?? user.LastName;
+            user.LastName = dto.NewLastName ?? user.LastName;
             user.PhoneNumber = dto.NewPhoneNumber ?? user.PhoneNumber;
 
             var result = await _userManager.UpdateAsync(user);
@@ -121,8 +122,8 @@ namespace CorpsAPI.Controllers
 
             bookings.ForEach(b =>
             {
-                b.Status  = BookingStatus.Cancelled;
-                b.UserId  = null;
+                b.Status = BookingStatus.Cancelled;
+                b.UserId = null;
                 b.ChildId = null;
             });
             await _context.SaveChangesAsync();
@@ -169,8 +170,8 @@ namespace CorpsAPI.Controllers
 
             bookings.ForEach(b =>
             {
-                b.Status  = BookingStatus.Cancelled;
-                b.UserId  = null;
+                b.Status = BookingStatus.Cancelled;
+                b.UserId = null;
                 b.ChildId = null;
             });
             await _context.SaveChangesAsync();
@@ -195,5 +196,58 @@ namespace CorpsAPI.Controllers
             await tx.CommitAsync();
             return Ok(new { message = SuccessMessages.ProfileDeleteSuccessful });
         }
+        [HttpGet("medical")]
+        public async Task<IActionResult> GetMyMedical()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var items = await _context.UserMedicalConditions
+                .Where(m => m.UserId == user.Id)
+                .Select(m => new MedicalConditionDto { Name = m.Name, Notes = m.Notes })
+                .ToListAsync();
+
+            return Ok(new {
+                hasMedicalConditions = items.Count > 0,
+                medicalConditions = items
+            });
+        }
+
+        public class UpsertMedicalRequest
+        {
+            public bool HasMedicalConditions { get; set; }
+            public List<MedicalConditionDto>? MedicalConditions { get; set; }
+        }
+
+        [HttpPut("medical")]
+        public async Task<IActionResult> UpsertMyMedical([FromBody] UpsertMedicalRequest dto)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+
+            var existing = await _context.UserMedicalConditions
+                .Where(m => m.UserId == user.Id)
+                .ToListAsync();
+
+            _context.UserMedicalConditions.RemoveRange(existing);
+
+            if (dto.HasMedicalConditions && dto.MedicalConditions is not null && dto.MedicalConditions.Count > 0)
+            {
+                var rows = dto.MedicalConditions
+                    .Where(m => !string.IsNullOrWhiteSpace(m.Name))
+                    .Select(m => new UserMedicalCondition {
+                        UserId = user.Id,
+                        Name = m.Name.Trim(),
+                        Notes = string.IsNullOrWhiteSpace(m.Notes) ? null : m.Notes!.Trim()
+                    })
+                    .ToList();
+
+                _context.UserMedicalConditions.AddRange(rows);
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Medical details updated." });
+        }
+
     }
 }

@@ -9,6 +9,7 @@ using CorpsAPI.Constants;
 using CorpsAPI.DTOs.Auth;
 using CorpsAPI.Models;
 using CorpsAPI.Services;
+using CorpsAPI.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -27,14 +28,16 @@ namespace CorpsAPI.Controllers
         private readonly TokenService _tokenService;
         private readonly IMemoryCache _memoryCache;
         private readonly IConfiguration _configuration;
+        private readonly AppDbContext _context;
 
         public AuthController(
-            UserManager<AppUser> userManager, 
-            SignInManager<AppUser> signInManager, 
+            UserManager<AppUser> userManager,
+            SignInManager<AppUser> signInManager,
             EmailService emailService,
             TokenService tokenService,
             IMemoryCache memoryCache,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            AppDbContext context)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -42,55 +45,101 @@ namespace CorpsAPI.Controllers
             _tokenService = tokenService;
             _memoryCache = memoryCache;
             _configuration = configuration;
+            _context = context;
+        }
+        private static int CalculateAge(DateOnly dob)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var age = today.Year - dob.Year;
+            if (today < dob.AddYears(age)) age--;
+            return age;
         }
         
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
-            var user = new AppUser
-            {
-                UserName = dto.UserName,
-                Email = dto.Email,
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                DateOfBirth = dto.DateOfBirth,
-                PhoneNumber = dto.PhoneNumber
-            };
+            var age = CalculateAge(dto.DateOfBirth);
 
-            // Check for duplicate email
+            // Age-gated validation for medical fields
+            if (age < 16)
+            {
+                if (dto.HasMedicalConditions is null)
+                    return BadRequest(new { message = "Please indicate whether the user has medical conditions/allergies." });
+
+                if (dto.HasMedicalConditions == true)
+                {
+                    if (dto.MedicalConditions is null || dto.MedicalConditions.Count == 0)
+                        return BadRequest(new { message = "List at least one medical condition/allergy or set the toggle to No." });
+
+                    // optional: sanitize/validate entries
+                    foreach (var mc in dto.MedicalConditions)
+                    {
+                        if (string.IsNullOrWhiteSpace(mc.Name))
+                            return BadRequest(new { message = "Condition name cannot be empty." });
+                    }
+                }
+            }
+
+            // Duplicate email check
             var existingUser = await _userManager.FindByEmailAsync(dto.Email);
             if (existingUser != null)
                 return BadRequest(new { message = ErrorMessages.EmailTaken });
 
+            var user = new AppUser
+            {
+                UserName    = dto.UserName,
+                Email       = dto.Email,
+                FirstName   = dto.FirstName,
+                LastName    = dto.LastName,
+                DateOfBirth = dto.DateOfBirth,
+                PhoneNumber = dto.PhoneNumber
+            };
+
             var createResult = await _userManager.CreateAsync(user, dto.Password);
             if (!createResult.Succeeded)
             {
-                // Add each IdentityError into ModelState for a ValidationProblem
                 foreach (var error in createResult.Errors)
                     ModelState.AddModelError(string.Empty, error.Description);
-
-                // Returns 400 with a ProblemDetails payload showing each relevant error
                 return ValidationProblem(ModelState);
             }
 
-            // Now it's safe to assign a role
             await _userManager.AddToRoleAsync(user, Roles.User);
 
-            // Generate email verification token
+            // Persist medical conditions for <16 registrations
+            if (age < 16 && dto.HasMedicalConditions == true && dto.MedicalConditions != null)
+            {
+                var rows = dto.MedicalConditions
+                    .Select(m => new UserMedicalCondition
+                    {
+                        UserId    = user.Id,
+                        Name = m.Name.Trim(),
+                        Notes     = string.IsNullOrWhiteSpace(m.Notes) ? null : m.Notes!.Trim()
+                    })
+                    // de-dup by name if you want:
+                    .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.First())
+                    .ToList();
+
+                if (rows.Count > 0)
+                {
+                    _context.UserMedicalConditions.AddRange(rows);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            // Email confirm flow (unchanged)
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
             var serverUrl = _configuration["ServerUrl"];
             var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
-
-            // Send email
-            await _emailService.SendEmailAsync(user.Email, "Verify your email", 
+            await _emailService.SendEmailAsync(user.Email, "Verify your email",
                 $"Confirm your email:\n<a href='{confirmationUrl}'>Click Here!</a>");
 
-            // Store in memory
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
-            return Ok(new { message = SuccessMessages.RegistrationSuccessful }); //(constant) string SuccessMessages.RegistrationSuccessful = "Registration successful. Please check your email to activate your account.
+            return Ok(new { message = SuccessMessages.RegistrationSuccessful });
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)

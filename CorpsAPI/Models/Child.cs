@@ -38,6 +38,8 @@ namespace CorpsAPI.Models
         public AppUser ParentUser { get; set; } = default!;
 
         public List<Booking> Bookings { get; set; } = new();
+        public bool HasMedicalConditions { get; set; }
+        public List<ChildMedicalCondition> MedicalConditions { get; set; } = new();
 
         [NotMapped]
         public int Age

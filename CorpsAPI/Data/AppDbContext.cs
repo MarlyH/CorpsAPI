@@ -14,6 +14,8 @@ namespace CorpsAPI.Data
         public DbSet<Location>      Locations          { get; set; }
         public DbSet<Child>         Children           { get; set; }
         public DbSet<Waitlist>      Waitlists          { get; set; }
+        public DbSet<UserMedicalCondition> UserMedicalConditions => Set<UserMedicalCondition>();
+        public DbSet<ChildMedicalCondition> ChildMedicalConditions => Set<ChildMedicalCondition>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -46,6 +48,20 @@ namespace CorpsAPI.Data
                 // Database will not cascade already null out in code
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // User => UserMedicalConditions (cascade on user delete)
+            builder.Entity<UserMedicalCondition>()
+                .HasOne(m => m.User)
+                .WithMany(u => u.MedicalConditions)
+                .HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Child => ChildMedicalConditions (cascade on child delete)
+            builder.Entity<ChildMedicalCondition>()
+                .HasOne(m => m.Child)
+                .WithMany(c => c.MedicalConditions)
+                .HasForeignKey(m => m.ChildId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
             // Event => Location
             builder.Entity<Event>()
                 .HasOne(e => e.Location)

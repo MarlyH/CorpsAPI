@@ -333,10 +333,25 @@ namespace CorpsAPI.Controllers
                     ? $"{booking.User.FirstName} {booking.User.LastName}"
                     : "User");
 
-            // Optional child payload (only if IsForChild && Child exists)
+            // CHILD block (medical included if present)
             ChildDto? childDto = null;
             if (booking.IsForChild && booking.Child != null)
             {
+                // Load child medical conditions
+                var childMeds = await _context.ChildMedicalConditions
+                    .AsNoTracking()
+                    .Where(m => m.ChildId == booking.Child.ChildId)
+                    .OrderByDescending(m => m.IsAllergy) // allergies first (optional)
+                    .ThenBy(m => m.Name)
+                    .Select(m => new MedicalConditionDto
+                    {
+                        Id = m.Id,
+                        Name = m.Name,
+                        Notes = m.Notes,
+                        IsAllergy = m.IsAllergy
+                    })
+                    .ToListAsync();
+
                 childDto = new ChildDto
                 {
                     ChildId = booking.Child.ChildId,
@@ -345,16 +360,34 @@ namespace CorpsAPI.Controllers
                     DateOfBirth = booking.Child.DateOfBirth,
                     EmergencyContactName = booking.Child.EmergencyContactName,
                     EmergencyContactPhone = booking.Child.EmergencyContactPhone,
-                    Age = CalculateAge(booking.Child.DateOfBirth)
+                    Age = CalculateAge(booking.Child.DateOfBirth),
+
+                    // If your ChildDto has these fields now:
+                    HasMedicalConditions = childMeds.Count > 0,
+                    MedicalConditions = childMeds
                 };
             }
 
-            // Optional mini user block (handy context for admins)
+            // USER mini block (medical included if present)
             AdminUserMiniDto? userMini = null;
             if (booking.User != null)
             {
-                // trigger IsSuspended property logic
-                var _ = booking.User.IsSuspended;
+                // trigger IsSuspended property logic (your side-effect)
+                _ = booking.User.IsSuspended;
+
+                var userMeds = await _context.UserMedicalConditions
+                    .AsNoTracking()
+                    .Where(m => m.UserId == booking.User.Id)
+                    .OrderByDescending(m => m.IsAllergy)
+                    .ThenBy(m => m.Name)
+                    .Select(m => new MedicalConditionDto
+                    {
+                        Id = m.Id,
+                        Name = m.Name,
+                        Notes = m.Notes,
+                        IsAllergy = m.IsAllergy
+                    })
+                    .ToListAsync();
 
                 userMini = new AdminUserMiniDto
                 {
@@ -363,6 +396,11 @@ namespace CorpsAPI.Controllers
                     PhoneNumber = booking.User.PhoneNumber,
                     FirstName = booking.User.FirstName,
                     LastName = booking.User.LastName,
+
+                    // Safer to compute rather than read a non-existent property:
+                    HasMedicalConditions = userMeds.Count > 0,
+                    MedicalConditions = userMeds,
+
                     AttendanceStrikeCount = booking.User.AttendanceStrikeCount,
                     DateOfLastStrike = booking.User.DateOfLastStrike,
                     IsSuspended = booking.User.IsSuspended
@@ -397,6 +435,7 @@ namespace CorpsAPI.Controllers
 
             return Ok(resp);
         }
+
 
         private static int CalculateAge(DateOnly dob)
         {

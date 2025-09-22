@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.AspNetCore.Identity;
+using CorpsAPI.Models;
 
 namespace CorpsAPI.Models
 {
@@ -15,6 +16,8 @@ namespace CorpsAPI.Models
         public List<Child> Children { get; set; } = new();
         public List<Waitlist> Waitlists { get; set; } = new();
         public new string PhoneNumber { get; set; } = default!;
+        public bool HasMedicalConditions { get; set; }
+        public List<UserMedicalCondition> MedicalConditions { get; set; } = new();
 
         [NotMapped]
         public bool IsSuspended

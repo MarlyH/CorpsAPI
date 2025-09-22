@@ -1,5 +1,6 @@
 using CorpsAPI.Constants;
 using CorpsAPI.DTOs.Child;
+using CorpsAPI.DTOs;
 using CorpsAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -31,35 +32,37 @@ namespace CorpsAPI.Controllers
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            List<Child> children;
+            IQueryable<Child> q = _context.Children.AsNoTracking();
+            if (!(roles.Contains(Roles.Admin) || roles.Contains(Roles.EventManager)))
+                q = q.Where(c => c.ParentUserId == user.Id);
 
-            if (roles.Contains(Roles.Admin) || roles.Contains(Roles.EventManager))
-            {
-                // Admins and EventManagers get all children
-                children = await _context.Children.ToListAsync();
-            }
-            else
-            {
-                // Regular users and staff only get their own
-                children = await _context.Children
-                    .Where(c => c.ParentUserId == user.Id)
-                    .ToListAsync();
-            }
+            var children = await q
+                .Select(c => new {
+                    Child = c,
+                    Meds = _context.ChildMedicalConditions
+                        .Where(m => m.ChildId == c.ChildId)
+                        .Select(m => new MedicalConditionDto {
+                            Id = m.Id, Name = m.Name, Notes = m.Notes, IsAllergy = m.IsAllergy
+                        })
+                        .ToList()
+                })
+                .ToListAsync();
 
-            var result = children.Select(c => new ChildDto
+            var result = children.Select(x => new ChildDto
             {
-                ChildId = c.ChildId,
-                FirstName = c.FirstName,
-                LastName = c.LastName,
-                DateOfBirth = c.DateOfBirth,
-                EmergencyContactName = c.EmergencyContactName,
-                EmergencyContactPhone = c.EmergencyContactPhone,
-                Age = c.Age
+                ChildId = x.Child.ChildId,
+                FirstName = x.Child.FirstName,
+                LastName = x.Child.LastName,
+                DateOfBirth = x.Child.DateOfBirth,
+                EmergencyContactName = x.Child.EmergencyContactName,
+                EmergencyContactPhone = x.Child.EmergencyContactPhone,
+                Age = x.Child.Age,
+                HasMedicalConditions = x.Meds.Count > 0,
+                MedicalConditions = x.Meds
             });
 
             return Ok(result);
         }
-
 
         [HttpGet("{id}")]
         public async Task<IActionResult> Get(int id)
@@ -69,22 +72,25 @@ namespace CorpsAPI.Controllers
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            Child? child;
-
+            IQueryable<Child> q = _context.Children.AsNoTracking();
             if (roles.Contains(Roles.Admin) || roles.Contains(Roles.EventManager))
-            {
-                // Admin/EventManager can fetch any child
-                child = await _context.Children.FirstOrDefaultAsync(c => c.ChildId == id);
-            }
+                q = q.Where(c => c.ChildId == id);
             else
-            {
-                // Regular users/staff must own the child
-                child = await _context.Children
-                    .FirstOrDefaultAsync(c => c.ChildId == id && c.ParentUserId == user.Id);
-            }
+                q = q.Where(c => c.ChildId == id && c.ParentUserId == user.Id);
 
+            var child = await q.FirstOrDefaultAsync();
             if (child == null)
                 return NotFound(new { message = "Child not found." });
+
+            var meds = await _context.ChildMedicalConditions
+                .AsNoTracking()
+                .Where(m => m.ChildId == child.ChildId)
+                .OrderByDescending(m => m.IsAllergy)
+                .ThenBy(m => m.Name)
+                .Select(m => new MedicalConditionDto {
+                    Id = m.Id, Name = m.Name, Notes = m.Notes, IsAllergy = m.IsAllergy
+                })
+                .ToListAsync();
 
             return Ok(new ChildDto
             {
@@ -94,16 +100,21 @@ namespace CorpsAPI.Controllers
                 DateOfBirth = child.DateOfBirth,
                 EmergencyContactName = child.EmergencyContactName,
                 EmergencyContactPhone = child.EmergencyContactPhone,
-                Age = child.Age
+                Age = child.Age,
+                HasMedicalConditions = meds.Count > 0,
+                MedicalConditions = meds
             });
         }
-
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateChildDto dto)
         {
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
+
+            // If toggle is true, ensure at least one condition provided
+            if (dto.HasMedicalConditions && (dto.MedicalConditions == null || dto.MedicalConditions.Count == 0))
+                return BadRequest(new { message = "Please add at least one medical condition or set the toggle to No." });
 
             var child = new Child
             {
@@ -116,7 +127,24 @@ namespace CorpsAPI.Controllers
             };
 
             _context.Children.Add(child);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(); // need ChildId
+
+            // Insert medical conditions if any
+            if (dto.HasMedicalConditions && dto.MedicalConditions != null)
+            {
+                var rows = dto.MedicalConditions
+                    .Where(m => !string.IsNullOrWhiteSpace(m.Name))
+                    .Select(m => new ChildMedicalCondition
+                    {
+                        ChildId = child.ChildId,
+                        Name = m.Name.Trim(),
+                        Notes = m.Notes?.Trim(),
+                        IsAllergy = m.IsAllergy
+                    });
+
+                _context.ChildMedicalConditions.AddRange(rows);
+                await _context.SaveChangesAsync();
+            }
 
             return Ok(new { message = "Child created successfully.", childId = child.ChildId });
         }
@@ -131,14 +159,37 @@ namespace CorpsAPI.Controllers
             if (child == null)
                 return NotFound(new { message = "Child not found." });
 
+            if (dto.HasMedicalConditions && (dto.MedicalConditions == null || dto.MedicalConditions.Count == 0))
+                return BadRequest(new { message = "Please add at least one medical condition or set the toggle to No." });
+
             child.FirstName = dto.FirstName;
             child.LastName = dto.LastName;
             child.DateOfBirth = dto.DateOfBirth;
             child.EmergencyContactName = dto.EmergencyContactName;
             child.EmergencyContactPhone = dto.EmergencyContactPhone;
 
-            await _context.SaveChangesAsync();
+            // Replace-all semantics for simplicity:
+            var existing = await _context.ChildMedicalConditions
+                .Where(m => m.ChildId == child.ChildId)
+                .ToListAsync();
+            if (existing.Count > 0)
+                _context.ChildMedicalConditions.RemoveRange(existing);
 
+            if (dto.HasMedicalConditions && dto.MedicalConditions != null)
+            {
+                var rows = dto.MedicalConditions
+                    .Where(m => !string.IsNullOrWhiteSpace(m.Name))
+                    .Select(m => new ChildMedicalCondition
+                    {
+                        ChildId = child.ChildId,
+                        Name = m.Name.Trim(),
+                        Notes = m.Notes?.Trim(),
+                        IsAllergy = m.IsAllergy
+                    });
+                _context.ChildMedicalConditions.AddRange(rows);
+            }
+
+            await _context.SaveChangesAsync();
             return Ok(new { message = "Child updated successfully." });
         }
 
@@ -148,37 +199,33 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return Unauthorized();
 
-            // make sure the caller owns this child
             var child = await _context.Children
                 .FirstOrDefaultAsync(c => c.ChildId == id && c.ParentUserId == user.Id);
 
             if (child == null)
                 return NotFound(new { message = "Child not found." });
 
-            // cancel and free any active bookings for this child
+            // cancel bookings (your existing logic)
             var activeBookings = await _context.Bookings
-                .Where(b => b.IsForChild
-                            && b.ChildId == id
-                            && b.Status != BookingStatus.Cancelled)
+                .Where(b => b.IsForChild && b.ChildId == id && b.Status != BookingStatus.Cancelled)
                 .ToListAsync();
 
             foreach (var b in activeBookings)
             {
                 b.Status = BookingStatus.Cancelled;
-                b.SeatNumber = null; // free seat
+                b.SeatNumber = null;
 
-                // break FK so the child can be deleted (and keep a display name for history)
                 if (string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName))
                     b.ReservedBookingAttendeeName = $"{child.FirstName} {child.LastName}";
 
                 b.ChildId = null;
                 b.IsForChild = false;
             }
-            _context.Children.Remove(child);
+
+            _context.Children.Remove(child); // Ensure cascade delete is configured (see note below)
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Child deleted successfully. Associated bookings were cancelled and seats freed." });
         }
-
     }
 }

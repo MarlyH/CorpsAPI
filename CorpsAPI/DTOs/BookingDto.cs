@@ -66,6 +66,8 @@ namespace CorpsAPI.DTOs
         public string? PhoneNumber { get; set; }
         public string FirstName { get; set; } = default!;
         public string LastName { get; set; } = default!;
+        public bool HasMedicalConditions { get; set; }
+        public List<MedicalConditionDto>? MedicalConditions { get; set; }
         public int AttendanceStrikeCount { get; set; }
         public DateOnly? DateOfLastStrike { get; set; }
         public bool IsSuspended { get; set; }

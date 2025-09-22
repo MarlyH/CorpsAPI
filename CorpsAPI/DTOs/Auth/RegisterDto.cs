@@ -20,5 +20,12 @@ namespace CorpsAPI.DTOs.Auth
         public DateOnly DateOfBirth { get; set; }
         [Required]
         public string PhoneNumber { get; set; } = default!;
+        public bool? HasMedicalConditions { get; set; }          // nullable so it’s optional for >=16
+        public List<MedicalConditionDto>? MedicalConditions { get; set; } // required iff HasMedicalConditions==true
+    }
+    public class MedicalConditionDto
+    {
+        public string Name  { get; set; } = default!;
+        public string? Notes { get; set; }
     }
 }
