@@ -196,6 +196,7 @@ namespace CorpsAPI.Controllers
             await tx.CommitAsync();
             return Ok(new { message = SuccessMessages.ProfileDeleteSuccessful });
         }
+
         [HttpGet("medical")]
         public async Task<IActionResult> GetMyMedical()
         {
@@ -204,10 +205,17 @@ namespace CorpsAPI.Controllers
 
             var items = await _context.UserMedicalConditions
                 .Where(m => m.UserId == user.Id)
-                .Select(m => new MedicalConditionDto { Name = m.Name, Notes = m.Notes })
+                .Select(m => new MedicalConditionDto
+                {
+                    Id = m.Id,
+                    Name = m.Name,
+                    Notes = m.Notes,
+                    IsAllergy = m.IsAllergy
+                })
                 .ToListAsync();
 
-            return Ok(new {
+            return Ok(new
+            {
                 hasMedicalConditions = items.Count > 0,
                 medicalConditions = items
             });
@@ -231,14 +239,17 @@ namespace CorpsAPI.Controllers
 
             _context.UserMedicalConditions.RemoveRange(existing);
 
-            if (dto.HasMedicalConditions && dto.MedicalConditions is not null && dto.MedicalConditions.Count > 0)
+            if (dto.HasMedicalConditions &&
+                dto.MedicalConditions is { Count: > 0 })
             {
                 var rows = dto.MedicalConditions
                     .Where(m => !string.IsNullOrWhiteSpace(m.Name))
-                    .Select(m => new UserMedicalCondition {
+                    .Select(m => new UserMedicalCondition
+                    {
                         UserId = user.Id,
                         Name = m.Name.Trim(),
-                        Notes = string.IsNullOrWhiteSpace(m.Notes) ? null : m.Notes!.Trim()
+                        Notes = string.IsNullOrWhiteSpace(m.Notes) ? null : m.Notes!.Trim(),
+                        IsAllergy = m.IsAllergy
                     })
                     .ToList();
 
@@ -248,6 +259,5 @@ namespace CorpsAPI.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { message = "Medical details updated." });
         }
-
     }
 }
