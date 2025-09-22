@@ -1,5 +1,6 @@
 using CorpsAPI.Data;
 using CorpsAPI.DTOs.Child;
+using CorpsAPI.DTOs;
 using CorpsAPI.Models;
 using CorpsAPI.Constants;
 using Microsoft.AspNetCore.Authorization;
@@ -35,6 +36,25 @@ public class BookingAdminController : ControllerBase
         if (b == null)
             return NotFound(new { message = "Booking not found." });
 
+        // ---- CHILD (with medical) ----
+        List<MedicalConditionDto> childMeds = new();
+        if (b.IsForChild && b.Child != null)
+        {
+            childMeds = await _context.ChildMedicalConditions
+                .AsNoTracking()
+                .Where(m => m.ChildId == b.Child.ChildId)
+                .OrderByDescending(m => m.IsAllergy)
+                .ThenBy(m => m.Name)
+                .Select(m => new MedicalConditionDto
+                {
+                    Id = m.Id,
+                    Name = m.Name,
+                    Notes = m.Notes,
+                    IsAllergy = m.IsAllergy
+                })
+                .ToListAsync();
+        }
+
         var childDto = b.IsForChild && b.Child != null
             ? new ChildDto
             {
@@ -44,9 +64,34 @@ public class BookingAdminController : ControllerBase
                 DateOfBirth = b.Child.DateOfBirth,
                 EmergencyContactName = b.Child.EmergencyContactName,
                 EmergencyContactPhone = b.Child.EmergencyContactPhone,
-                Age = CalculateAge(b.Child.DateOfBirth)
+                Age = CalculateAge(b.Child.DateOfBirth),
+
+                HasMedicalConditions = childMeds.Count > 0,
+                MedicalConditions = childMeds
             }
             : null;
+
+        // ---- USER (with medical) ----
+        List<MedicalConditionDto> userMeds = new();
+        if (b.User != null)
+        {
+            // trigger any computed properties if needed
+            _ = b.User.IsSuspended;
+
+            userMeds = await _context.UserMedicalConditions
+                .AsNoTracking()
+                .Where(m => m.UserId == b.User.Id)
+                .OrderByDescending(m => m.IsAllergy)
+                .ThenBy(m => m.Name)
+                .Select(m => new MedicalConditionDto
+                {
+                    Id = m.Id,
+                    Name = m.Name,
+                    Notes = m.Notes,
+                    IsAllergy = m.IsAllergy
+                })
+                .ToListAsync();
+        }
 
         var userMini = b.User == null ? null : new
         {
@@ -57,12 +102,16 @@ public class BookingAdminController : ControllerBase
             lastName = b.User.LastName,
             attendanceStrikeCount = b.User.AttendanceStrikeCount,
             dateOfLastStrike = b.User.DateOfLastStrike,
-            isSuspended = b.User.IsSuspended
+            isSuspended = b.User.IsSuspended,
+
+            // NEW
+            hasMedicalConditions = userMeds.Count > 0,
+            medicalConditions = userMeds
         };
 
-        // A booking is considered a "reservation" if these fields are set.
+        // A booking is a "reservation" if these fields are set.
         var isReserved = !string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName)
-                 || !string.IsNullOrWhiteSpace(b.ReservedBookingPhone);
+                    || !string.IsNullOrWhiteSpace(b.ReservedBookingPhone);
 
         var effectiveAttendeeName =
             isReserved ? (b.ReservedBookingAttendeeName ?? "Reserved attendee")
@@ -86,7 +135,7 @@ public class BookingAdminController : ControllerBase
             isReserved,
             reservedAttendeeName = b.ReservedBookingAttendeeName,
             reservedPhone = b.ReservedBookingPhone,
-            reservedGuardianName = b.ReservedBookingParentGuardianName, // ← NEW
+            reservedGuardianName = b.ReservedBookingParentGuardianName,
 
             attendeeName = effectiveAttendeeName,
 
@@ -95,8 +144,8 @@ public class BookingAdminController : ControllerBase
         };
 
         return Ok(dto);
-
     }
+
 
 
     private static int CalculateAge(DateOnly dob)
