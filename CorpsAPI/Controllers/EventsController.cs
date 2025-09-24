@@ -84,6 +84,7 @@ namespace CorpsAPI.Controllers
             {
                 eventId = ev.EventId,
                 locationName = ev.Location?.Name,
+                locationMascotImgSrc = ev.Location?.MascotImgSrc,
                 startDate = ev.StartDate,
                 startTime = ev.StartTime,
                 endTime = ev.EndTime,
