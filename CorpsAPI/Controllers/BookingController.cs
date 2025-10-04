@@ -174,37 +174,67 @@ namespace CorpsAPI.Controllers
             await _context.SaveChangesAsync();
 
             // send confirmation email
+            string eventDatePretty = eventEntity.StartDate.ToString("dddd, MMMM d, yyyy");
+            string timeRangePretty = $"{eventEntity.StartTime:h\\:mm} – {eventEntity.EndTime:h\\:mm}"; // if TimeOnly or TimeSpan
+            string locationName    = eventEntity.Location?.Name ?? "TBA";
+            string addressPretty   = string.IsNullOrWhiteSpace(eventEntity.Address) 
+                ? "Address TBA"
+                : eventEntity.Address;
+
+            string seatText        = $"Seat {dto.SeatNumber}";
+            string sessionTypeText = eventEntity.SessionType.ToString();
+
+            var appName   = "Your Corps";
+            var logoUrl   = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var support   = "yourcorps@yourcorps.co.nz";
+
+            // Optional: if you have a deep link or web ticket view, add it here.
+            // e.g., corpsapp://ticket/{booking.BookingId} or $"{serverUrl}/ticket/{booking.BookingId}"
+            string? viewInAppUrl = null;
+
+            // Inline QR setup (same as you have)
             var qrGen = new QRCodeGenerator();
             var qrData = qrGen.CreateQrCode(booking.QrCodeData, QRCodeGenerator.ECCLevel.Q);
             var qrPng = new PngByteQRCode(qrData);
-            byte[] qrBytes = qrPng.GetGraphic(10); // pixels per module
+            byte[] qrBytes = qrPng.GetGraphic(10);
 
             const string qrCid = "booking_qr";
 
-            var emailBody = $@"
-            <p>Dear {user.UserName},</p>
-            <p>Thank you for your booking. Your reservation has been confirmed:</p>
-            <ul>
-                <li><strong>Date:</strong> {eventEntity.StartDate:dddd, MMMM d, yyyy}</li>
-                <li><strong>Time:</strong> {eventEntity.StartTime:h:mm} - {eventEntity.EndTime:h:mm}</li>
-                <li><strong>Location:</strong> {eventEntity.Location?.Name ?? "TBA"}, {eventEntity.Address ?? "No address provided"}</li>
-                <li><strong>Session Type:</strong> {eventEntity.SessionType}</li>
-            </ul>
-            <p>Present this QR code at the entrance to check in/out:</p>
-            <p style=""text-align:center"">
-                <img src=""cid:{qrCid}"" alt=""Your Corps ticket QR"" width=""200"" height=""200"" />
-            </p>
-            <p>You can also view this ticket anytime in the app.</p>
-            <p>Warm regards,<br/>The Your Corps Team</p>
-            ";
+            // Build HTML using the new template
+            string emailBody = EmailBookingTemplate.BookingConfirmationHtml(
+                appName: appName,
+                logoUrl: logoUrl,
+                supportEmail: support,
+                userDisplayName: user.FirstName ?? user.UserName ?? "there",
+                sessionType: sessionTypeText,
+                eventDatePretty: eventDatePretty,
+                timeRangePretty: timeRangePretty,
+                locationName: locationName,
+                addressPretty: addressPretty,
+                seatText: seatText,
+                isChildBooking: dto.IsForChild,
+                childNameOrNull: dto.IsForChild 
+                    ? (await _context.Children.Where(c => c.ChildId == dto.ChildId)
+                                            .Select(c => c.FirstName + (string.IsNullOrEmpty(c.LastName) ? "" : $" {c.LastName}"))
+                                            .FirstOrDefaultAsync())
+                    : null,
+                qrCid: qrCid,
+                viewInAppUrl: viewInAppUrl
+            );
 
-            // Fire-and-forget to avoid slowing the response
+            // Fire-and-forget as before
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await _emailService.SendEmailWithInlineAsync(
-                        user.Email!, "Booking Confirmation", emailBody, qrBytes, qrCid, MediaTypeNames.Image.Png);
+                        user.Email!,
+                        "Your Corps – Booking confirmed",
+                        emailBody,
+                        qrBytes,
+                        qrCid,
+                        MediaTypeNames.Image.Png
+                    );
                 }
                 catch
                 {
