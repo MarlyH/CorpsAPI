@@ -41,44 +41,30 @@ namespace CorpsAPI.Controllers
             var resetPswdToken = await _userManager.GeneratePasswordResetTokenAsync(user);
             var otp = new Random().Next(100000, 999999).ToString();
 
+            // BRAND SETTINGS
+            const string appName = "Your Corps";
+            const string logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            const string supportEmail = "yourcorps@yourcorps.co.nz";
+            const int expiresInMinutes = 10;
+
+            var htmlBody = EmailOTPTemplate.PasswordResetOtpHtml(
+                appName: appName,
+                logoUrl: logoUrl,
+                supportEmail: supportEmail,
+                userDisplayName: user.FirstName ?? user.UserName ?? "there",
+                otpCode: otp,
+                expiresInMinutes: expiresInMinutes
+            );
+
             // send email to user containing the OTP
             await _emailService.SendEmailAsync(
                 user.Email,
-                "Reset Password",
-                $@"
-                <div style='
-                    background-color: #f9f9f9;
-                    padding: 40px 20px;
-                    font-family: Helvetica, Arial, sans-serif;
-                    text-align: center;
-                    color: #333;
-                '>
-                    <h2 style='margin-bottom: 24px;'>Reset Your Password</h2>
-
-                    <p style='font-size: 16px; margin-bottom: 30px;'>
-                        Use the one-time password (OTP) below to reset your account password. This code is valid for 10 minutes.
-                    </p>
-
-                    <div style='
-                        display: inline-block;
-                        font-size: 32px;
-                        font-weight: bold;
-                        letter-spacing: 6px;
-                        color: #ffffff;
-                        background-color: #007BFF;
-                        padding: 16px 32px;
-                        border-radius: 12px;
-                        margin-bottom: 30px;
-                    '>{otp}</div>
-
-                    <p style='font-size: 14px; color: #777; margin-top: 32px;'>
-                        If you didn't request a password reset, please ignore this message.<br>
-                        For security, do not share this code with anyone.
-                    </p>
-                </div>"
+                $"{appName} – Reset your password",
+                htmlBody
             );
+
             // store OTP in memory
-            _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(10));
+            _memoryCache.Set(user.Email, otp, TimeSpan.FromMinutes(expiresInMinutes));
 
             // return token to client
             return Ok(new
@@ -87,6 +73,7 @@ namespace CorpsAPI.Controllers
                 resetPswdToken
             });
         }
+
 
         [HttpPost("verify-otp")]
         public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
