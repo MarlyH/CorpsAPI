@@ -110,4 +110,29 @@ namespace CorpsAPI.DTOs
         public string UserId { get; set; }
         public int EventId { get; set; }
     }
+
+    public class ReportRequestDto
+    {
+        public DateOnly StartDate { get; set; }
+        public DateOnly EndDate { get; set; }
+    }
+
+    public class EventReportDto
+    {
+        public int TotalEvents { get; set; }
+        public int TotalUsers { get; set; }          // app users (accounts)
+        public int TotalBookings { get; set; }       // non-cancelled bookings
+        public int TotalTurnout { get; set; }        // attended bookings
+        public int UniqueAttendees { get; set; }     // distinct persons (users + children)
+        public int RecurringAttendees { get; set; }
+        public double AverageAttendeesPerEvent { get; set; }
+        public IEnumerable<EventsPerLocationDto> EventsPerLocation { get; set; } = new List<EventsPerLocationDto>();
+        public double AttendanceRateOverall { get; set; }
+    }
+
+    public class EventsPerLocationDto
+    {
+        public string Location { get; set; } = default!;
+        public int Count { get; set; }
+    }
 }

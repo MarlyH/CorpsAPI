@@ -420,7 +420,88 @@ namespace CorpsAPI.Controllers
             return Ok(new { message = $"Attendance updated to {dto.NewStatus}." });
         }
 
+        // POST: api/Events/report
+        [HttpPost("report")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.EventManager}")]
+        public async Task<IActionResult> GetEventReport([FromBody] ReportRequestDto dto)
+        {
+            if (dto.EndDate < dto.StartDate)
+                return BadRequest(new { message = "EndDate cannot be earlier than StartDate." });
 
+            var eventsInRange = await _context.Events
+                .Include(e => e.Bookings)
+                    .ThenInclude(b => b.User)
+                .Include(e => e.Bookings)
+                    .ThenInclude(b => b.Child)
+                .Include(e => e.Location)
+                .Where(e => e.StartDate >= dto.StartDate && e.StartDate <= dto.EndDate)
+                .ToListAsync();
+
+            if (!eventsInRange.Any())
+                return Ok(new { message = "No events found in the given date range." });
+
+            var totalEvents = eventsInRange.Count;
+
+            // All non-cancelled bookings
+            var totalBookings = eventsInRange
+                .SelectMany(e => e.Bookings)
+                .Count(b => b.Status != BookingStatus.Cancelled);
+
+            // Attended bookings only
+            var attendedBookings = eventsInRange
+                .SelectMany(e => e.Bookings)
+                .Where(b => b.Status == BookingStatus.CheckedIn || b.Status == BookingStatus.CheckedOut)
+                .ToList();
+
+            var totalTurnout = attendedBookings.Count; // seats actually filled
+
+            // Build out list of unique persons to account for user vs child
+            var attendeeKeys = attendedBookings
+                .Select(b => b.IsForChild && b.ChildId.HasValue
+                    ? $"child-{b.ChildId}"
+                    : !string.IsNullOrEmpty(b.UserId) ? $"user-{b.UserId}" : null)
+                .Where(k => k != null)
+                .ToList();
+
+            var uniqueAttendees = attendeeKeys.Distinct().Count();
+
+            var recurringAttendees = attendeeKeys
+                .GroupBy(k => k)
+                .Count(g => g.Count() > 1);
+
+            var totalUsers = await _context.Users.CountAsync();
+
+            var averageAttendeesPerEvent = totalEvents > 0 ? (double)totalTurnout / totalEvents : 0;
+
+            var eventsPerLocation = eventsInRange
+                .GroupBy(e => e.Location!.Name)
+                .Select(g => new
+                {
+                    Location = g.Key,
+                    Count = g.Count()
+                });
+
+            var totalSeats = eventsInRange.Sum(e => e.TotalSeats);
+            var attendanceRateOverall = totalSeats > 0 ? (double)totalTurnout / totalSeats : 0;
+
+            var reportDto = new EventReportDto
+            {
+                TotalEvents = totalEvents,
+                TotalUsers = totalUsers,
+                TotalBookings = totalBookings,
+                TotalTurnout = totalTurnout,
+                UniqueAttendees = uniqueAttendees,
+                RecurringAttendees = recurringAttendees,
+                AverageAttendeesPerEvent = Math.Round(averageAttendeesPerEvent, 2),
+                EventsPerLocation = eventsPerLocation.Select(e => new EventsPerLocationDto
+                {
+                    Location = e.Location,
+                    Count = e.Count
+                }),
+                AttendanceRateOverall = Math.Round(attendanceRateOverall, 2)
+            };
+
+            return Ok(reportDto);
+        }
     }
-    
 }
