@@ -12,6 +12,7 @@ using CorpsAPI.Data;
 using CorpsAPI.DTOs.Child;
 using QRCoder;
 using System.Net.Mime;
+using System.Globalization;
 using System.Linq;
 
 
@@ -33,6 +34,8 @@ namespace CorpsAPI.Controllers
             _emailService = emailService;
             _notificationService = notificationService;
         }
+        private static string FormatTime12(TimeOnly t)
+            => t.ToString("h:mm tt", CultureInfo.InvariantCulture).ToLowerInvariant();
 
 
         private static DateTime? GetSuspendedUntil(AppUser user)
@@ -175,13 +178,15 @@ namespace CorpsAPI.Controllers
 
             // send confirmation email
             string eventDatePretty = eventEntity.StartDate.ToString("dddd, MMMM d, yyyy");
-            string timeRangePretty = $"{eventEntity.StartTime:h\\:mm} – {eventEntity.EndTime:h\\:mm}"; // if TimeOnly or TimeSpan
+            // string timeRangePretty = $"{eventEntity.StartTime:h\\:mm} – {eventEntity.EndTime:h\\:mm}"; // if TimeOnly or TimeSpan
+            string timeRangePretty = $"{FormatTime12(eventEntity.StartTime)} – {FormatTime12(eventEntity.EndTime)}";
+
             string locationName    = eventEntity.Location?.Name ?? "TBA";
             string addressPretty   = string.IsNullOrWhiteSpace(eventEntity.Address) 
                 ? "Address TBA"
                 : eventEntity.Address;
 
-            string seatText        = $"Seat {dto.SeatNumber}";
+            string seatText        = $"Ticket {dto.SeatNumber}";
             string sessionTypeText = eventEntity.SessionType.ToString();
 
             var appName   = "Your Corps";
@@ -324,7 +329,9 @@ namespace CorpsAPI.Controllers
                     ? (!string.IsNullOrWhiteSpace(ev.Address) ? $"{venueName}, {ev.Address}" : venueName)
                     : (ev.Address ?? "TBA");
 
-                var when = $"{ev.StartDate:ddd, MMM d} at {ev.StartTime:hh\\:mm}";
+                // var when = $"{ev.StartDate:ddd, MMM d} at {ev.StartTime:hh\\:mm}";
+                var when = $"{ev.StartDate:ddd, MMM d} at {FormatTime12(ev.StartTime)}";
+
 
                 foreach (var entry in waitlistEntries)
                 {
@@ -444,8 +451,10 @@ namespace CorpsAPI.Controllers
                 EventId = ev.EventId,
                 EventName = ev.Location?.Name,
                 EventDate = ev.StartDate,
-                StartTime = ev.StartTime.ToString(@"hh\:mm"),
-                EndTime = ev.EndTime.ToString(@"hh\:mm"),
+                // StartTime = ev.StartTime.ToString(@"hh\:mm"),
+                // EndTime = ev.EndTime.ToString(@"hh\:mm"),
+                StartTime = FormatTime12(ev.StartTime),
+                EndTime= FormatTime12(ev.EndTime),
                 SessionType = ev.SessionType.ToString(),
                 LocationName = ev.Location?.Name,
                 Address = ev.Address,

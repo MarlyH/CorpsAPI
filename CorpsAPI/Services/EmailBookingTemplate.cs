@@ -137,7 +137,7 @@ namespace CorpsAPI.Services
                                             <td style=""font-family:Segoe UI, Arial, sans-serif; font-size:14px; color:#cfcfcf; padding:6px 0;"">{System.Net.WebUtility.HtmlEncode(sessionType)}</td>
                                             </tr>
                                             <tr>
-                                            <td style=""font-family:Segoe UI, Arial, sans-serif; font-size:14px; color:#eaeaea; padding:6px 0;"">Seat</td>
+                                            <td style=""font-family:Segoe UI, Arial, sans-serif; font-size:14px; color:#eaeaea; padding:6px 0;"">Ticket</td>
                                             <td style=""font-family:Segoe UI, Arial, sans-serif; font-size:14px; color:#cfcfcf; padding:6px 0;"">{System.Net.WebUtility.HtmlEncode(seatText)}</td>
                                             </tr>
                                         </table>
