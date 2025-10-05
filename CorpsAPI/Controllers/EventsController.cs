@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace CorpsAPI.Controllers
 {
@@ -27,6 +28,8 @@ namespace CorpsAPI.Controllers
             _context = context;
             _azureStorageService = azureStorageService;
         }
+        private static string FormatTime12(TimeOnly t)
+            => t.ToString("h:mm tt", CultureInfo.InvariantCulture).ToLowerInvariant();
 
         // GET: api/Events
         [HttpGet]
@@ -233,19 +236,40 @@ namespace CorpsAPI.Controllers
 
                 if (!string.IsNullOrWhiteSpace(booking.User?.Email))
                 {
-                    var emailBody = $@"
-                <p>Dear {booking.User.UserName},</p>
-                <p>The event you booked on <strong>{ev.StartDate}</strong> at <strong>{ev.StartTime}</strong> has been <strong>cancelled</strong>.</p>";
+                    // Pretty strings (12-hour am/pm)
+                    string eventDatePretty = ev.StartDate.ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture);
+                    string timeRangePretty = $"{FormatTime12(ev.StartTime)} – {FormatTime12(ev.EndTime)}";
 
-                    if (!string.IsNullOrWhiteSpace(dto.CancellationMessage))
-                        emailBody += $"<p><strong>Message from the organiser:</strong> {dto.CancellationMessage}</p>";
+                    string locationName  = ev.Location?.Name ?? "TBA";
+                    string addressPretty = string.IsNullOrWhiteSpace(ev.Address)
+                        ? "Address TBA"
+                        : ev.Address;
 
-                    emailBody += "<p>We apologise for any inconvenience caused.</p>";
+                    string sessionType = ev.SessionType.ToString();
+
+                    var appName = "Your Corps";
+                    var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+                    var support = "yourcorps@yourcorps.co.nz";
+
+                    string displayName = booking.User.FirstName ?? booking.User.UserName ?? "there";
+
+                    string htmlBody = EmailEventTemplate.EventCancellationHtml(
+                        appName: appName,
+                        logoUrl: logoUrl,
+                        supportEmail: support,
+                        userDisplayName: displayName,
+                        eventDatePretty: eventDatePretty,
+                        timeRangePretty: timeRangePretty,
+                        locationName: locationName,
+                        addressPretty: addressPretty,
+                        sessionType: sessionType,
+                        organiserMessage: string.IsNullOrWhiteSpace(dto.CancellationMessage) ? null : dto.CancellationMessage
+                    );
 
                     await emailService.SendEmailAsync(
                         booking.User.Email,
-                        "Your event has been cancelled",
-                        emailBody
+                        "Your Corps – Event cancelled",
+                        htmlBody
                     );
                 }
             }
