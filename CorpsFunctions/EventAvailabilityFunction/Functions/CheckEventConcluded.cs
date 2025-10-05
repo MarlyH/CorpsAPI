@@ -40,51 +40,50 @@ public class CheckEventConcluded
 
         foreach (var ev in eventsToUpdate)
         {
-        var unattended = ev.Bookings
-            .Where(b => b.Status == BookingStatus.Booked || b.Status == BookingStatus.CheckedIn)
-            .ToList();
+            // unattended before we mutate anything
+            var unattended = ev.Bookings
+                .Where(b => b.Status == BookingStatus.Booked || b.Status == BookingStatus.CheckedIn)
+                .ToList();
 
-        // Mark all unattended bookings as Striked
-        foreach (var b in unattended)
-        {
-            b.Status = BookingStatus.Striked;
-            b.SeatNumber = null;
-        }
+            // users who were already striked on this event BEFORE we change anything now
+            var alreadyStrikedUserIds = ev.Bookings
+                .Where(b => b.Status == BookingStatus.Striked && b.User != null)
+                .Select(b => b.User!.Id)
+                .Distinct()
+                .ToHashSet();
 
-        // Users to penalize (skip reservations/null users)
-        var penalizableUserIds = unattended
-            .Where(b => string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName) && b.User != null)
-            .Select(b => b.User!.Id)
-            .Distinct()
-            .ToList();
-
-        // Optional: avoid double-penalizing if this event already produced strikes
-        var alreadyStrikedUserIds = ev.Bookings
-            .Where(b => b.Status == BookingStatus.Striked && b.User != null)
-            .Select(b => b.User!.Id)
-            .Distinct()
-            .ToHashSet();
-
-        penalizableUserIds = penalizableUserIds
-            .Where(id => !alreadyStrikedUserIds.Contains(id))
-            .ToList();
-
-        // Load users and increment once each
-        if (penalizableUserIds.Count > 0)
-        {
-            var users = await context.Users
-            .Where(u => penalizableUserIds.Contains(u.Id))
-            .ToListAsync();
-
-            foreach (var u in users)
+            // mark unattended bookings as Striked (mutation happens AFTER the check above)
+            foreach (var b in unattended)
             {
-            u.AttendanceStrikeCount++;
-            u.DateOfLastStrike = todayNz;
+                b.Status = BookingStatus.Striked;
+                b.SeatNumber = null;
             }
+
+            // users to penalize (skip reservations/null users)
+            var penalizableUserIds = unattended
+                .Where(b => string.IsNullOrWhiteSpace(b.ReservedBookingAttendeeName) && b.User != null)
+                .Select(b => b.User!.Id)
+                .Distinct()
+                .Where(id => !alreadyStrikedUserIds.Contains(id)) // avoid double-penalizing if this event already produced strikes
+                .ToList();
+
+            if (penalizableUserIds.Count > 0)
+            {
+                // load users and increment once each
+                var users = await context.Users
+                    .Where(u => penalizableUserIds.Contains(u.Id))
+                    .ToListAsync();
+
+                foreach (var u in users)
+                {
+                    u.AttendanceStrikeCount++;
+                    u.DateOfLastStrike = todayNz;
+                }
+            }
+
+            ev.Status = EventStatus.Concluded;
         }
 
-        ev.Status = EventStatus.Concluded;
-        }
 
         await context.SaveChangesAsync();
 
