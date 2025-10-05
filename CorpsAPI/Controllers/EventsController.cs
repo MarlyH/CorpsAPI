@@ -217,6 +217,7 @@ namespace CorpsAPI.Controllers
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
 
             var ev = await _context.Events
+                .Include(e => e.Location)
                 .Include(e => e.Bookings)
                     .ThenInclude(b => b.User)
                 .FirstOrDefaultAsync(e => e.EventId == id);
@@ -240,8 +241,8 @@ namespace CorpsAPI.Controllers
                     string eventDatePretty = ev.StartDate.ToString("dddd, MMMM d, yyyy", CultureInfo.InvariantCulture);
                     string timeRangePretty = $"{FormatTime12(ev.StartTime)} – {FormatTime12(ev.EndTime)}";
 
-                    string locationName  = ev.Location?.Name ?? "TBA";
-                    string addressPretty = string.IsNullOrWhiteSpace(ev.Address)
+                    string locationName = ev.Location?.Name ?? "TBA";
+                    string addressPretty = string.IsNullOrWhiteSpace(ev.Address) 
                         ? "Address TBA"
                         : ev.Address;
 
