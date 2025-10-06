@@ -158,7 +158,7 @@ namespace CorpsAPI.Controllers
             }
 
             if (!ageIsOk)
-                return BadRequest(new { message = "Provided age for the booking is not within bounds." });
+                return BadRequest(new { message = "The attendee's age is not within bounds." });
 
             var booking = new Booking
             {
