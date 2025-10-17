@@ -215,19 +215,28 @@ namespace CorpsAPI.Controllers
 
             var total = await query.CountAsync();
 
-            var items = await query
-                .OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
+            var users = await query
+                .OrderBy(u => u.FirstName).ThenBy(u => u.LastName)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(u => new UserMiniDto
+                .ToListAsync();
+
+            var items = new List<UserMiniDto>();
+
+            foreach (var u in users)
+            {
+                var userRoles = await _userManager.GetRolesAsync(u);
+
+                items.Add(new UserMiniDto
                 {
                     Id = u.Id,
                     Email = u.Email ?? string.Empty,
                     PhoneNumber = u.PhoneNumber ?? string.Empty,
                     FirstName = u.FirstName,
-                    LastName = u.LastName
-                })
-                .ToListAsync();
+                    LastName = u.LastName,
+                    Roles = userRoles.ToList(),
+                });
+            }
 
             return Ok(new
             {
