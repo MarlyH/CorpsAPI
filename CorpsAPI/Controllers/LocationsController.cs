@@ -32,6 +32,7 @@ namespace CorpsAPI.Controllers
         public async Task<IActionResult> GetLocations()
         {
             var locations = await _context.Locations
+                .OrderBy(l => l.Name)
                 .ToListAsync();
 
             var dtos = locations
