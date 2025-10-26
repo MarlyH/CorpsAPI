@@ -69,9 +69,9 @@ namespace CorpsAPI.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { message = result.Errors });
 
-            // optionally also set UserName to match new email if that's your policy:
-            user.UserName = newEmail;
-            await _userManager.UpdateAsync(user);
+            // if you want the username to match the email
+            // user.UserName = newEmail;
+            // await _userManager.UpdateAsync(user);
 
             var appName = "Your Corps";
             var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
