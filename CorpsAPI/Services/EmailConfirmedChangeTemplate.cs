@@ -119,7 +119,7 @@ namespace CorpsAPI.Services
 
             <div class=""title"">Email updated</div>
             <p class=""lead"">
-            Your account email has been changed successfully. You can now sign in with your new email.
+            Your account email has been changed successfully. Re-Login with NEW email to complete change.
             </p>
 
             {(string.IsNullOrWhiteSpace(appDeepLink) ? "" : $@"<div class=""cta"">
