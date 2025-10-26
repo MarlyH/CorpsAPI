@@ -32,7 +32,6 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.GetUserAsync(User);
             if (user == null)
                 return Unauthorized(new { message = ErrorMessages.InvalidRequest });
-
             // Ensure requested address isn't taken
             var existingUser = await _userManager.FindByEmailAsync(dto.NewEmail);
             if (existingUser != null)
@@ -42,9 +41,20 @@ namespace CorpsAPI.Controllers
             var encodedToken = WebUtility.UrlEncode(token);
 
             var serverUrl = _configuration["ServerUrl"];
-            var url = $"{serverUrl}/api/email/confirm-email-change?userId={user.Id}&newEmail={dto.NewEmail}&token={encodedToken}";
-            await _emailService.SendEmailAsync(dto.NewEmail, "Confirm Email Change", $"<a href='{url}'>Click here to confirm</a>");
+            var url = $"{serverUrl}/api/email/confirm-email-change?userId={user.Id}&newEmail={WebUtility.UrlEncode(dto.NewEmail)}&token={encodedToken}";
 
+            var appName = "Your Corps";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var htmlBody = EmailConfirmChangeTemplate.ConfirmEmailChangeHtml(
+                appName: appName,
+                currentEmail: user.Email ?? "",
+                newEmail: dto.NewEmail,
+                confirmationUrl: url,
+                logoUrl: logoUrl,
+                supportEmail: "yourcorps@yourcorps.co.nz"
+            );
+
+            await _emailService.SendEmailAsync(dto.NewEmail, $"{appName} – Confirm your new email", htmlBody);
             return Ok(new { message = SuccessMessages.ChangeEmailRequest });
         }
 
@@ -59,7 +69,21 @@ namespace CorpsAPI.Controllers
             if (!result.Succeeded)
                 return BadRequest(new { message = result.Errors });
 
-            return Ok(new { message = SuccessMessages.ChangeEmailSuccess });
+            // optionally also set UserName to match new email if that's your policy:
+            user.UserName = newEmail;
+            await _userManager.UpdateAsync(user);
+
+            var appName = "Your Corps";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var appLink = (_configuration["AppDeepLink"] ?? _configuration["ClientUrl"] ?? "").Trim();
+
+            var html = EmailConfirmedChangeTemplate.EmailChangeConfirmedHtml(
+                appName: appName,
+                logoUrl: logoUrl,
+                appDeepLink: string.IsNullOrWhiteSpace(appLink) ? null : appLink
+            );
+
+            return Content(html, "text/html");
         }
     }
 }
