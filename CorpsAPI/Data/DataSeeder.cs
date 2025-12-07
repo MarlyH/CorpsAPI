@@ -37,7 +37,8 @@ namespace CorpsAPI.Data
                     EmailConfirmed = true,
                     FirstName = "James",
                     LastName = "Ward",
-                    DateOfBirth = dateOfBirth
+                    DateOfBirth = dateOfBirth,
+                    PhoneNumber = "00000000000"
                 };
 
                 var result = await userManager.CreateAsync(adminUser, password);
