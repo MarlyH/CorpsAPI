@@ -1,7 +1,12 @@
 ﻿using CorpsAPI.Data;
 using Microsoft.Azure.NotificationHubs;
 using Microsoft.Azure.NotificationHubs.Messaging;
+<<<<<<< Updated upstream
 using System.Text;
+=======
+using Microsoft.Extensions.Logging;
+using System.Text.Json;
+>>>>>>> Stashed changes
 
 namespace CorpsAPI.Services
 {
@@ -39,8 +44,8 @@ namespace CorpsAPI.Services
                     throw new ArgumentException("Platform must be either 'iOS' or 'Android'");
             }
 
-            // Add user tag for targetted push notifications
-            registration.Tags = new HashSet<string> { $"user:{userId}" };
+            // Add user and push-enabled tags for targeted and broadcast notifications.
+            registration.Tags = new HashSet<string> { $"user:{userId}", "push:enabled" };
 
             try
             {
@@ -179,6 +184,56 @@ namespace CorpsAPI.Services
                     Console.Error.WriteLine($"Failed to send notification to {registration.GetType().Name} device: {ex.Message}");
                 }
             }
+        }
+
+        public async Task SendBroadcastNotificationAsync(string title, string body)
+        {
+            if (!_isConfigured || _hub == null)
+            {
+                throw new InvalidOperationException("Azure Notification Hub is not configured in this environment.");
+            }
+
+            var safeTitle = title?.Trim();
+            var safeBody = body?.Trim();
+
+            if (string.IsNullOrWhiteSpace(safeTitle) || string.IsNullOrWhiteSpace(safeBody))
+                throw new ArgumentException("Broadcast title and message are required.");
+
+            var fcmPayload = JsonSerializer.Serialize(new
+            {
+                message = new
+                {
+                    notification = new { title = safeTitle, body = safeBody },
+                    data = new
+                    {
+                        click_action = "FLUTTER_NOTIFICATION_CLICK",
+                        notificationType = "admin_broadcast"
+                    }
+                }
+            });
+
+            var apnsPayload = JsonSerializer.Serialize(new
+            {
+                aps = new
+                {
+                    alert = new { title = safeTitle, body = safeBody },
+                    sound = "default"
+                },
+                notificationType = "admin_broadcast"
+            });
+
+            var fcmNotification = new FcmV1Notification(fcmPayload)
+            {
+                ContentType = "application/json"
+            };
+            var apnsNotification = new AppleNotification(apnsPayload)
+            {
+                ContentType = "application/json"
+            };
+
+            // Broadcast to all registrations tagged as push-enabled.
+            await _hub.SendNotificationAsync(fcmNotification, "push:enabled");
+            await _hub.SendNotificationAsync(apnsNotification, "push:enabled");
         }
     }
 }
