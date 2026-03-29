@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
+using System.Text.Json;
 
 namespace CorpsAPI.Controllers
 {
@@ -20,6 +21,7 @@ namespace CorpsAPI.Controllers
     [ApiController]
     public class EventsController : ControllerBase
     {
+        private const long MaxEventImageBytes = 4 * 1024 * 1024;
         private readonly AppDbContext _context;
         private readonly AzureStorageService _azureStorageService;
 
@@ -31,28 +33,178 @@ namespace CorpsAPI.Controllers
         private static string FormatTime12(TimeOnly t)
             => t.ToString("h:mm tt", CultureInfo.InvariantCulture).ToLowerInvariant();
 
+        // Frontend expects: 0=available, 1=unavailable, 2=cancelled, 3=concluded
+        private static int ToClientEventStatus(EventStatus status) => status switch
+        {
+            EventStatus.Available => 0,
+            EventStatus.Unavailable => 1,
+            EventStatus.Cancelled => 2,
+            EventStatus.Concluded => 3,
+            _ => 1
+        };
+
+        private static bool TryParseCategory(string? raw, out EventCategory category)
+        {
+            category = EventCategory.Bookable;
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+
+            var normalized = raw.Trim().ToLowerInvariant()
+                .Replace(" ", "")
+                .Replace("_", "")
+                .Replace("-", "");
+
+            if (normalized.Contains("promo"))
+            {
+                category = EventCategory.Promotional;
+                return true;
+            }
+
+            if (normalized.Contains("announce") || normalized.Contains("content") || normalized.Contains("custom"))
+            {
+                category = EventCategory.Announcement;
+                return true;
+            }
+
+            if (normalized.Contains("book"))
+            {
+                category = EventCategory.Bookable;
+                return true;
+            }
+
+            return Enum.TryParse(raw, true, out category);
+        }
+
+        private static List<string> ParseEventImageUrls(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return new List<string>();
+
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<List<string>>(trimmed);
+                    if (parsed != null)
+                    {
+                        return parsed
+                            .Where(url => !string.IsNullOrWhiteSpace(url))
+                            .Select(url => url.Trim())
+                            .ToList();
+                    }
+                }
+                catch
+                {
+                    // Backward compatibility: treat invalid JSON as a legacy single URL string.
+                }
+            }
+
+            return new List<string> { trimmed };
+        }
+
+        private static string? SerializeEventImageUrls(IEnumerable<string> urls)
+        {
+            var normalized = urls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (normalized.Count == 0)
+                return null;
+            if (normalized.Count == 1)
+                return normalized[0];
+
+            return JsonSerializer.Serialize(normalized);
+        }
+
         // GET: api/Events
         [HttpGet]
         public async Task<IActionResult> GetEvents()
         {
-            var list = await _context.Events
-                .Where(e => e.Status == EventStatus.Available)
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var rawList = await _context.Events
+                .Where(e =>
+                    e.Status == EventStatus.Available ||
+                    (!e.RequiresBooking &&
+                     e.Status != EventStatus.Cancelled &&
+                     e.Status != EventStatus.Concluded &&
+                     (!e.EndDate.HasValue || e.EndDate >= today)))
                 .Select(e => new
                 {
-                    e.EventId,
-                    LocationName = e.Location!.Name,
-                    e.StartDate,
-                    e.StartTime,
-                    e.EndTime,
-                    e.SessionType,
-                    e.SeatingMapImgSrc,
-                    e.TotalSeats,
-                    AvailableSeatsCount = e.TotalSeats - _context.Bookings.Count(b =>
-                        b.EventId == e.EventId &&
-                        b.Status  != BookingStatus.Cancelled &&
-                        b.SeatNumber != null)
+                    eventId = e.EventId,
+                    locationId = e.LocationId,
+                    locationName = e.Location != null ? e.Location.Name : (e.Title ?? "Event"),
+                    title = e.Title,
+                    eventCategory = e.Category,
+                    category = e.Category,
+                    requiresBooking = e.RequiresBooking,
+                    startDate = e.StartDate,
+                    fromDate = e.StartDate,
+                    endDate = e.EndDate,
+                    toDate = e.EndDate,
+                    startTime = e.StartTime,
+                    endTime = e.EndTime,
+                    sessionType = e.SessionType,
+                    description = e.Description,
+                    address = e.Address,
+                    seatingMapImgSrc = e.SeatingMapImgSrc,
+                    eventImageImgSrcRaw = e.EventImageImgSrc,
+                    totalSeats = e.RequiresBooking ? e.TotalSeats : 0,
+                    totalSeatsCount = e.RequiresBooking ? e.TotalSeats : 0,
+                    createdByEmail = e.EventManager != null ? e.EventManager.Email : null,
+                    availableSeatsCount = e.RequiresBooking
+                        ? e.TotalSeats - _context.Bookings.Count(b =>
+                            b.EventId == e.EventId &&
+                            b.Status != BookingStatus.Cancelled &&
+                            b.SeatNumber != null)
+                        : 0,
+                    status = e.Status == EventStatus.Available ? 0
+                        : e.Status == EventStatus.Unavailable ? 1
+                        : e.Status == EventStatus.Cancelled ? 2
+                        : 3,
+                    availbleSeatsCount = e.RequiresBooking
+                        ? e.TotalSeats - _context.Bookings.Count(b =>
+                            b.EventId == e.EventId &&
+                            b.Status != BookingStatus.Cancelled &&
+                            b.SeatNumber != null)
+                        : 0
                 })
                 .ToListAsync();
+
+            var list = rawList.Select(e =>
+            {
+                var imageUrls = ParseEventImageUrls(e.eventImageImgSrcRaw);
+                return new
+                {
+                    e.eventId,
+                    e.locationId,
+                    e.locationName,
+                    e.title,
+                    e.eventCategory,
+                    e.category,
+                    e.requiresBooking,
+                    e.startDate,
+                    e.fromDate,
+                    e.endDate,
+                    e.toDate,
+                    e.startTime,
+                    e.endTime,
+                    e.sessionType,
+                    e.description,
+                    e.address,
+                    e.seatingMapImgSrc,
+                    eventImageImgSrc = imageUrls.FirstOrDefault(),
+                    eventImageImgSrcs = imageUrls,
+                    e.totalSeats,
+                    e.totalSeatsCount,
+                    e.createdByEmail,
+                    e.availableSeatsCount,
+                    e.status,
+                    e.availbleSeatsCount
+                };
+            });
 
             return Ok(list);
         }
@@ -64,43 +216,60 @@ namespace CorpsAPI.Controllers
         {
             var ev = await _context.Events
                 .Include(e => e.Location)
+                .Include(e => e.EventManager)
                 .FirstOrDefaultAsync(e => e.EventId == id);
 
             if (ev == null)
                 return NotFound(new { message = ErrorMessages.EventNotFound });
 
-            // Seats currently taken by active bookings
-            var taken = await _context.Bookings
-                .Where(b => b.EventId == id &&
-                            b.Status != BookingStatus.Cancelled &&
-                            b.SeatNumber != null)
-                .Select(b => b.SeatNumber!.Value)
-                .ToListAsync();
+            var available = new List<int>();
+            if (ev.RequiresBooking && ev.TotalSeats > 0)
+            {
+                // Seats currently taken by active bookings
+                var taken = await _context.Bookings
+                    .Where(b => b.EventId == id &&
+                                b.Status != BookingStatus.Cancelled &&
+                                b.SeatNumber != null)
+                    .Select(b => b.SeatNumber!.Value)
+                    .ToListAsync();
 
-            var available = Enumerable.Range(1, ev.TotalSeats).Except(taken).ToList();
+                available = Enumerable.Range(1, ev.TotalSeats).Except(taken).ToList();
+            }
 
             // (Optional but recommended) prevent any caching
             Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0";
+            var imageUrls = ParseEventImageUrls(ev.EventImageImgSrc);
 
             // Shape the payload to what the app expects
             var dto = new
             {
                 eventId = ev.EventId,
-                locationName = ev.Location?.Name,
+                locationId = ev.LocationId,
+                locationName = ev.Location?.Name ?? ev.Title ?? "Event",
                 locationMascotImgSrc = ev.Location?.MascotImgSrc,
+                title = ev.Title,
+                eventCategory = ev.Category,
+                category = ev.Category,
+                requiresBooking = ev.RequiresBooking,
                 startDate = ev.StartDate,
+                fromDate = ev.StartDate,
+                endDate = ev.EndDate,
+                toDate = ev.EndDate,
                 startTime = ev.StartTime,
                 endTime = ev.EndTime,
                 sessionType = ev.SessionType,
                 seatingMapImgSrc = ev.SeatingMapImgSrc,
+                eventImageImgSrc = imageUrls.FirstOrDefault(),
+                eventImageImgSrcs = imageUrls,
                 description = ev.Description,
                 address = ev.Address,
-
-                totalSeats = ev.TotalSeats,
+                createdByEmail = ev.EventManager?.Email,
+                totalSeats = ev.RequiresBooking ? ev.TotalSeats : 0,
+                totalSeatsCount = ev.RequiresBooking ? ev.TotalSeats : 0,
                 availableSeats = available,
-                availableSeatsCount = available.Count,
-
-                status = ev.Status
+                availableSeatsCount = ev.RequiresBooking ? available.Count : 0,
+                status = ToClientEventStatus(ev.Status),
+                availbleSeatsCount = ev.RequiresBooking ? available.Count : 0
             };
 
             return Ok(dto);
@@ -116,29 +285,87 @@ namespace CorpsAPI.Controllers
 
             IQueryable<Event> q = _context.Events
                 .AsNoTracking()
-                .Where(e => e.Status == EventStatus.Available);
+                .Where(e => e.Status == EventStatus.Available && e.RequiresBooking);
 
             // Admin sees ALL; EventManager sees ONLY their own
             if (!isAdmin)
                 q = q.Where(e => e.EventManagerId == userId);
 
-            var list = await q
+            var rawList = await q
                 .OrderBy(e => e.StartDate)
                 .Select(e => new {
-                    e.EventId,
-                    LocationName = e.Location != null ? e.Location.Name : "",
-                    e.StartDate,
-                    e.StartTime,
-                    e.EndTime,
-                    e.SessionType,
-                    e.SeatingMapImgSrc,
-                    e.TotalSeats,
-                    AvailableSeatsCount = e.TotalSeats - e.Bookings.Count(b =>
-                        b.SeatNumber != null &&
-                        b.Status != BookingStatus.Cancelled &&
-                        b.Status != BookingStatus.Striked)
+                    eventId = e.EventId,
+                    locationId = e.LocationId,
+                    locationName = e.Location != null ? e.Location.Name : (e.Title ?? "Event"),
+                    title = e.Title,
+                    eventCategory = e.Category,
+                    category = e.Category,
+                    requiresBooking = e.RequiresBooking,
+                    startDate = e.StartDate,
+                    fromDate = e.StartDate,
+                    endDate = e.EndDate,
+                    toDate = e.EndDate,
+                    startTime = e.StartTime,
+                    endTime = e.EndTime,
+                    sessionType = e.SessionType,
+                    seatingMapImgSrc = e.SeatingMapImgSrc,
+                    eventImageImgSrcRaw = e.EventImageImgSrc,
+                    description = e.Description,
+                    address = e.Address,
+                    totalSeats = e.RequiresBooking ? e.TotalSeats : 0,
+                    totalSeatsCount = e.RequiresBooking ? e.TotalSeats : 0,
+                    availableSeatsCount = e.RequiresBooking
+                        ? e.TotalSeats - e.Bookings.Count(b =>
+                            b.SeatNumber != null &&
+                            b.Status != BookingStatus.Cancelled &&
+                            b.Status != BookingStatus.Striked)
+                        : 0,
+                    createdByEmail = e.EventManager != null ? e.EventManager.Email : null,
+                    status = e.Status == EventStatus.Available ? 0
+                        : e.Status == EventStatus.Unavailable ? 1
+                        : e.Status == EventStatus.Cancelled ? 2
+                        : 3,
+                    availbleSeatsCount = e.RequiresBooking
+                        ? e.TotalSeats - e.Bookings.Count(b =>
+                            b.SeatNumber != null &&
+                            b.Status != BookingStatus.Cancelled &&
+                            b.Status != BookingStatus.Striked)
+                        : 0
                 })
                 .ToListAsync();
+
+            var list = rawList.Select(e =>
+            {
+                var imageUrls = ParseEventImageUrls(e.eventImageImgSrcRaw);
+                return new
+                {
+                    e.eventId,
+                    e.locationId,
+                    e.locationName,
+                    e.title,
+                    e.eventCategory,
+                    e.category,
+                    e.requiresBooking,
+                    e.startDate,
+                    e.fromDate,
+                    e.endDate,
+                    e.toDate,
+                    e.startTime,
+                    e.endTime,
+                    e.sessionType,
+                    e.seatingMapImgSrc,
+                    eventImageImgSrc = imageUrls.FirstOrDefault(),
+                    eventImageImgSrcs = imageUrls,
+                    e.description,
+                    e.address,
+                    e.totalSeats,
+                    e.totalSeatsCount,
+                    e.availableSeatsCount,
+                    e.createdByEmail,
+                    e.status,
+                    e.availbleSeatsCount
+                };
+            });
 
             return Ok(list);
         }
@@ -147,7 +374,8 @@ namespace CorpsAPI.Controllers
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
         [Authorize(Roles = $"{Roles.EventManager}, {Roles.Admin}")]
-        [RequestSizeLimit(10 * 1024 * 1024)] // Limit to 10MB
+        [RequestSizeLimit(30 * 1024 * 1024)] // supports multiple images while still enforcing 4MB per image below
+        [RequestFormLimits(MultipartBodyLengthLimit = 30 * 1024 * 1024)]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> PostEvent([FromForm] CreateEventDto dto)
         {
@@ -166,46 +394,136 @@ namespace CorpsAPI.Controllers
                 return BadRequest(new { message = errors });
             }
 
-            if (dto.AvailableDate > dto.StartDate)
+            var requestedCategoryRaw = dto.EventCategory ?? dto.Category;
+            var hasCategory = TryParseCategory(requestedCategoryRaw, out var parsedCategory);
+            var requiresBooking = dto.RequiresBooking
+                ?? (hasCategory ? parsedCategory == EventCategory.Bookable : true);
+
+            if (!hasCategory)
+                parsedCategory = requiresBooking ? EventCategory.Bookable : EventCategory.Announcement;
+            if (requiresBooking)
+                parsedCategory = EventCategory.Bookable;
+
+            var startDate = dto.StartDate ?? dto.FromDate;
+            var endDate = dto.EndDate ?? dto.ToDate;
+            var availableDate = dto.AvailableDate ?? startDate;
+            var startTime = dto.StartTime;
+            var endTime = dto.EndTime;
+
+            if (!startDate.HasValue)
+                return BadRequest(new { message = "StartDate (or FromDate) is required." });
+
+            endDate ??= startDate;
+            availableDate ??= startDate;
+
+            if (endDate.Value < startDate.Value)
+                return BadRequest(new { message = "EndDate cannot be earlier than StartDate." });
+
+            if (availableDate.Value > startDate.Value)
                 return BadRequest(new { message = ErrorMessages.EventNotAvailable });
 
-            string? imageUrl = null;
-            if (dto.SeatingMapImage != null)
+            if (requiresBooking)
             {
-                // upload the seating map image
+                if (!dto.LocationId.HasValue)
+                    return BadRequest(new { message = "LocationId is required for bookable events." });
+                if (!dto.SessionType.HasValue)
+                    return BadRequest(new { message = "SessionType is required for bookable events." });
+                if (!dto.StartTime.HasValue || !dto.EndTime.HasValue)
+                    return BadRequest(new { message = "StartTime and EndTime are required for bookable events." });
+                if (!dto.TotalSeats.HasValue || dto.TotalSeats.Value <= 0)
+                    return BadRequest(new { message = "TotalSeats must be greater than zero for bookable events." });
+            }
+            else
+            {
+                startTime ??= new TimeOnly(0, 0);
+                endTime ??= new TimeOnly(23, 59);
+            }
+
+            if (dto.LocationId.HasValue)
+            {
+                var locationExists = await _context.Locations.AnyAsync(l => l.LocationId == dto.LocationId.Value);
+                if (!locationExists)
+                    return BadRequest(new { message = "Location not found." });
+            }
+
+            string? seatingMapUrl = null;
+            if (requiresBooking && dto.SeatingMapImage != null)
+            {
                 try
                 {
-                    imageUrl = await _azureStorageService.UploadImageAsync(dto.SeatingMapImage);
+                    seatingMapUrl = await _azureStorageService.UploadImageAsync(dto.SeatingMapImage);
                 }
                 catch (Exception ex)
                 {
-                    return BadRequest(new { message = "Image upload failed", detail = ex.Message });
+                    return BadRequest(new { message = "Seating map upload failed", detail = ex.Message });
                 }
             }
 
+            var uploadedEventImageUrls = new List<string>();
+            if (!requiresBooking)
+            {
+                var eventImages = new List<IFormFile>();
+                if (dto.EventImages != null && dto.EventImages.Count > 0)
+                {
+                    eventImages.AddRange(dto.EventImages.Where(img => img != null && img.Length > 0));
+                }
+                if (dto.EventImage != null && dto.EventImage.Length > 0)
+                {
+                    eventImages.Add(dto.EventImage);
+                }
+
+                foreach (var image in eventImages)
+                {
+                    if (image.Length > MaxEventImageBytes)
+                    {
+                        return BadRequest(new { message = "Each event image must be 4MB or smaller." });
+                    }
+                }
+
+                foreach (var image in eventImages)
+                {
+                    try
+                    {
+                        var uploadedUrl = await _azureStorageService.UploadImageAsync(image);
+                        if (!string.IsNullOrWhiteSpace(uploadedUrl))
+                            uploadedEventImageUrls.Add(uploadedUrl);
+                    }
+                    catch (Exception ex)
+                    {
+                        return BadRequest(new { message = "Event image upload failed", detail = ex.Message });
+                    }
+                }
+            }
+            var eventImageStorageValue = SerializeEventImageUrls(uploadedEventImageUrls);
+
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var eventStatus = dto.AvailableDate <= today ? EventStatus.Available : EventStatus.Unavailable;
+            var eventStatus = availableDate.Value <= today ? EventStatus.Available : EventStatus.Unavailable;
 
             var newEvent = new Event
             {
                 LocationId = dto.LocationId,
                 EventManagerId = eventManagerId,
-                SessionType = dto.SessionType,
-                StartDate = dto.StartDate,
-                StartTime = dto.StartTime,
-                EndTime = dto.EndTime,
-                AvailableDate = dto.AvailableDate,
-                SeatingMapImgSrc = imageUrl,
-                TotalSeats = dto.TotalSeats,
-                Description = dto.Description,
-                Address = dto.Address,
+                Category = parsedCategory,
+                RequiresBooking = requiresBooking,
+                Title = string.IsNullOrWhiteSpace(dto.Title) ? null : dto.Title.Trim(),
+                SessionType = dto.SessionType ?? EventSessionType.Adults,
+                StartDate = startDate.Value,
+                EndDate = endDate.Value,
+                StartTime = startTime ?? dto.StartTime!.Value,
+                EndTime = endTime ?? dto.EndTime!.Value,
+                AvailableDate = availableDate.Value,
+                SeatingMapImgSrc = seatingMapUrl,
+                EventImageImgSrc = eventImageStorageValue,
+                TotalSeats = requiresBooking ? dto.TotalSeats!.Value : 0,
+                Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
+                Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim(),
                 Status = eventStatus
             };
 
             _context.Events.Add(newEvent);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = SuccessMessages.EventCreateSuccessful });
+            return Ok(new { message = SuccessMessages.EventCreateSuccessful, eventId = newEvent.EventId });
         }
 
         [HttpPut("{id}/cancel")]
@@ -337,6 +655,8 @@ namespace CorpsAPI.Controllers
 
             var ev = await _context.Events.FirstOrDefaultAsync(e => e.EventId == eventId);
             if (ev == null) return NotFound(new { message = ErrorMessages.EventNotFound });
+            if (!ev.RequiresBooking)
+                return BadRequest(new { message = "Waitlist is only available for bookable events." });
 
             var activeCount = await _context.Bookings.CountAsync(b =>
                 b.EventId == eventId &&
@@ -459,11 +779,14 @@ namespace CorpsAPI.Controllers
                 .Include(e => e.Bookings)
                     .ThenInclude(b => b.Child)
                 .Include(e => e.Location)
-                .Where(e => e.StartDate >= dto.StartDate && e.StartDate <= dto.EndDate)
+                .Where(e =>
+                    e.RequiresBooking &&
+                    e.StartDate >= dto.StartDate &&
+                    e.StartDate <= dto.EndDate)
                 .ToListAsync();
 
             if (!eventsInRange.Any())
-                return Ok(new { message = "No events found in the given date range." });
+                return Ok(new { message = "No bookable events found in the given date range." });
 
             var totalEvents = eventsInRange.Count;
 
@@ -499,7 +822,7 @@ namespace CorpsAPI.Controllers
             var averageAttendeesPerEvent = totalEvents > 0 ? (double)totalTurnout / totalEvents : 0;
 
             var eventsPerLocation = eventsInRange
-                .GroupBy(e => e.Location!.Name)
+                .GroupBy(e => e.Location?.Name ?? e.Title ?? "Unassigned")
                 .Select(g => new
                 {
                     Location = g.Key,

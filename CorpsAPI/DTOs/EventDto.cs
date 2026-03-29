@@ -5,18 +5,28 @@ namespace CorpsAPI.DTOs
 {
     public class CreateEventDto
     {
-        public int LocationId { get; set; }
-        public EventSessionType SessionType { get; set; }
-        public DateOnly StartDate { get; set; }
-        public TimeOnly StartTime { get; set; }
-        public TimeOnly EndTime { get; set; }
-        public DateOnly AvailableDate { get; set; }
-        public int TotalSeats { get; set; }
-        // [MaxLength(500)]
+        // New flexible fields (supports bookable + non-bookable submissions)
+        public string? Category { get; set; }
+        public string? EventCategory { get; set; }
+        public bool? RequiresBooking { get; set; }
+        public int? LocationId { get; set; }
+        public EventSessionType? SessionType { get; set; }
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? FromDate { get; set; }
+        public DateOnly? EndDate { get; set; }
+        public DateOnly? ToDate { get; set; }
+        public TimeOnly? StartTime { get; set; }
+        public TimeOnly? EndTime { get; set; }
+        public DateOnly? AvailableDate { get; set; }
+        public int? TotalSeats { get; set; }
+        [MaxLength(160)]
+        public string? Title { get; set; }
         public string? Description { get; set; }
         [MaxLength(100)]
         public string? Address { get; set; }
         public IFormFile? SeatingMapImage { get; set; } = default!;
+        public IFormFile? EventImage { get; set; } = default!;
+        public List<IFormFile>? EventImages { get; set; } = new();
     }
 
     public class GetAllEventsDto
@@ -24,7 +34,7 @@ namespace CorpsAPI.DTOs
         public GetAllEventsDto(Event e)
         {
             EventId = e.EventId;
-            LocationName = e.Location!.Name;
+            LocationName = e.Location?.Name ?? e.Title ?? "Event";
             SessionType = e.SessionType;
             StartDate = e.StartDate;
             StartTime = e.StartTime;
@@ -33,7 +43,7 @@ namespace CorpsAPI.DTOs
             Address = e.Address;
             TotalSeatsCount = e.TotalSeats;
             AvailbleSeatsCount = e.AvailableSeats;
-            MascotImgSrc = e.Location.MascotImgSrc;
+            MascotImgSrc = e.Location?.MascotImgSrc;
 
             // Get available seat numbers
             var bookedSeats = e.Bookings?.Select(b => b.SeatNumber).ToHashSet() ?? new HashSet<int?>();
@@ -62,7 +72,7 @@ namespace CorpsAPI.DTOs
         public GetEventDto(Event e)
         {
             EventId = e.EventId;
-            LocationName = e.Location!.Name;
+            LocationName = e.Location?.Name ?? e.Title ?? "Event";
             SessionType = e.SessionType;
             StartDate = e.StartDate;
             StartTime = e.StartTime;

@@ -83,6 +83,8 @@ namespace CorpsAPI.Controllers
 
             if (eventEntity == null || eventEntity.Status != EventStatus.Available)
                 return NotFound(new { message = "Event not found or not available for booking." });
+            if (!eventEntity.RequiresBooking)
+                return BadRequest(new { message = "This event does not accept bookings." });
 
             // Seat number bounds
             if (dto.SeatNumber < 1 || dto.SeatNumber > eventEntity.TotalSeats)
@@ -262,13 +264,15 @@ namespace CorpsAPI.Controllers
                 .Include(b => b.Child)
                 .Include(b => b.User)
                 // drop child-bookings whose Child was deleted
-                .Where(b => b.UserId == userId && (!b.IsForChild || b.ChildId != null))
+                .Where(b => b.Event != null && b.UserId == userId && (!b.IsForChild || b.ChildId != null))
                 .Select(b => new BookingResponseDto
                 {
                     BookingId = b.BookingId,
                     EventId = b.EventId,
-                    EventName = b.Event.Location!.Name,
-                    EventDate = b.Event.StartDate,
+                    EventName = b.Event!.Location != null
+                        ? b.Event.Location.Name
+                        : (b.Event.Title ?? "Event"),
+                    EventDate = b.Event!.StartDate,
                     SeatNumber = b.SeatNumber,
                     Status = b.Status,
                     CanBeLeftAlone = b.CanBeLeftAlone,
@@ -631,6 +635,8 @@ namespace CorpsAPI.Controllers
 
             if (eventEntity == null || eventEntity.Status != EventStatus.Available)
                 return NotFound(new { message = "Event not found or not available." });
+            if (!eventEntity.RequiresBooking)
+                return BadRequest(new { message = "This event does not accept reservations." });
 
             // Optional: seat bounds
             if (dto.SeatNumber > eventEntity.TotalSeats)

@@ -67,7 +67,8 @@ namespace CorpsAPI.Data
                 .HasOne(e => e.Location)
                 .WithMany(l => l.Events)
                 .HasForeignKey(e => e.LocationId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
 
             // Event => EventManager
             builder.Entity<Event>()

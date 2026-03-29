@@ -7,17 +7,23 @@ namespace CorpsAPI.Models
     {
         [Key]
         public int EventId { get; set; }
-        [Required]
-        public int LocationId { get; set; }
+        public int? LocationId { get; set; }
         [ForeignKey("LocationId")]
         public Location? Location { get; set; }
         public string? EventManagerId { get; set; } = default!;
         [ForeignKey("EventManagerId")]
         public AppUser? EventManager { get; set; }
         [Required]
+        public EventCategory Category { get; set; } = EventCategory.Bookable;
+        [Required]
+        public bool RequiresBooking { get; set; } = true;
+        [MaxLength(160)]
+        public string? Title { get; set; }
+        [Required]
         public EventSessionType SessionType { get; set; }
         [Required]
         public DateOnly StartDate { get; set; }
+        public DateOnly? EndDate { get; set; }
         [Required]
         public TimeOnly StartTime { get; set; }
         [Required]
@@ -25,6 +31,7 @@ namespace CorpsAPI.Models
         [Required]
         public DateOnly AvailableDate { get; set; }
         public string? SeatingMapImgSrc { get; set; }
+        public string? EventImageImgSrc { get; set; }
         [Required]
         public int TotalSeats { get; set; }
         public List<Booking> Bookings { get; set; } = new();
@@ -48,6 +55,13 @@ namespace CorpsAPI.Models
         Kids,
         Teens,
         Adults
+    }
+
+    public enum EventCategory
+    {
+        Bookable = 0,
+        Announcement = 1,
+        Promotional = 2
     }
 
     public enum EventStatus

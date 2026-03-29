@@ -1,24 +1,42 @@
-﻿using CorpsAPI.Data;
+using CorpsAPI.Data;
 using Microsoft.Azure.NotificationHubs;
 using Microsoft.Azure.NotificationHubs.Messaging;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace CorpsAPI.Services
 {
     public class NotificationService
     {
-        private readonly NotificationHubClient _hub;
+        private readonly NotificationHubClient? _hub;
+        private readonly ILogger<NotificationService> _logger;
+        private readonly bool _isConfigured;
 
-        public NotificationService(IConfiguration configuration)
+        public NotificationService(IConfiguration configuration, ILogger<NotificationService> logger)
         {
+            _logger = logger;
             var connectionString = configuration["AzureNotificationHub:ConnectionString"];
             var hubName = configuration["AzureNotificationHub:HubName"];
 
+            if (string.IsNullOrWhiteSpace(connectionString) || string.IsNullOrWhiteSpace(hubName))
+            {
+                _isConfigured = false;
+                _logger.LogWarning("Azure Notification Hub is not configured. Push notifications are disabled in this environment.");
+                return;
+            }
+
             _hub = NotificationHubClient.CreateClientFromConnectionString(connectionString, hubName);
+            _isConfigured = true;
         }
 
         public async Task RegisterDeviceAsync(string deviceToken, string platform, string userId)
         {
+            if (!_isConfigured || _hub == null)
+            {
+                _logger.LogWarning("RegisterDeviceAsync skipped because Notification Hub is not configured.");
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(deviceToken))
                 throw new ArgumentException("Device token must not be empty.");
 
@@ -107,6 +125,12 @@ namespace CorpsAPI.Services
 
         public async Task SendCrossPlatformNotificationAsync(string userId, string title, string body)
         {
+            if (!_isConfigured || _hub == null)
+            {
+                _logger.LogWarning("SendCrossPlatformNotificationAsync skipped because Notification Hub is not configured.");
+                return;
+            }
+
             var registrations = await _hub.GetRegistrationsByTagAsync($"user:{userId}", 100);
             if (registrations == null || !registrations.Any())
                 throw new Exception($"No device registrations found for user {userId}");
@@ -182,4 +206,3 @@ namespace CorpsAPI.Services
         }
     }
 }
-
