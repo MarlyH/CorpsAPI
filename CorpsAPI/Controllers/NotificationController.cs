@@ -1,12 +1,8 @@
 ﻿using CorpsAPI.Constants;
-using CorpsAPI.Data;
 using CorpsAPI.DTOs;
-using CorpsAPI.Models;
 using CorpsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.NotificationHubs;
 using System.Security.Claims;
 
 namespace CorpsAPI.Controllers
@@ -15,12 +11,10 @@ namespace CorpsAPI.Controllers
     [ApiController]
     public class NotificationController : ControllerBase
     {
-        private readonly AppDbContext _context;
         private readonly NotificationService _notificationService;
 
-        public NotificationController(AppDbContext context, NotificationService notificationService)
+        public NotificationController(NotificationService notificationService)
         {
-            _context = context;
             _notificationService = notificationService;
         }
 
@@ -84,6 +78,38 @@ namespace CorpsAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = $"Failed to send test notification: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("broadcast")]
+        [Authorize(Roles = Roles.Admin)]
+        public async Task<IActionResult> SendBroadcastNotification([FromBody] BroadcastNotificationDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState
+                    .Where(e => e.Value?.Errors.Count > 0)
+                    .SelectMany(e => e.Value!.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToArray();
+
+                return BadRequest(new { message = errors });
+            }
+
+            var title = string.IsNullOrWhiteSpace(dto.Title) ? "Your Corps Update" : dto.Title.Trim();
+            var message = dto.Message?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(message))
+                return BadRequest(new { message = "Message cannot be empty." });
+
+            try
+            {
+                await _notificationService.SendBroadcastNotificationAsync(title, message);
+                return Ok(new { message = "Broadcast notification sent." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = $"Failed to send broadcast notification: {ex.Message}" });
             }
         }
     }
