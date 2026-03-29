@@ -1,0 +1,56 @@
+[
+  {
+    "name": "CheckEventAvailability",
+    "scriptFile": "EventFunctions.dll",
+    "entryPoint": "CheckEventAvailability.Run",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "timer",
+        "direction": "In",
+        "type": "timerTrigger",
+        "schedule": "0 0 11 * * *",
+        "properties": {}
+      }
+    ]
+  },
+  {
+    "name": "CheckEventConcluded",
+    "scriptFile": "EventFunctions.dll",
+    "entryPoint": "CheckEventConcluded.Run",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "timer",
+        "direction": "In",
+        "type": "timerTrigger",
+        "schedule": "0 0 11 * * *",
+        "properties": {}
+      }
+    ]
+  },
+  {
+    "name": "SendEventReminder",
+    "scriptFile": "EventFunctions.dll",
+    "entryPoint": "SendEventReminder.Run",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "timer",
+        "direction": "In",
+        "type": "timerTrigger",
+        "schedule": "0 */30 * * * *",
+        "properties": {}
+      }
+    ]
+  }
+]

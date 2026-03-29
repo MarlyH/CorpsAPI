@@ -16,13 +16,29 @@ namespace CorpsAPI.Services
             _configuration = configuration;
         }
 
+        private (string ConnectionString, string ContainerName) GetStorageSettings()
+        {
+            // Prefer explicit app settings, but allow Azure Functions fallback.
+            var connectionString =
+                _configuration["AzureStorage:ConnectionString"] ??
+                _configuration["AzureWebJobsStorage"];
+
+            var containerName = _configuration["AzureStorage:ContainerName"];
+            if (string.IsNullOrWhiteSpace(containerName))
+                containerName = "images";
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new InvalidOperationException("Azure storage connection string is not configured.");
+
+            return (connectionString, containerName);
+        }
+
         public async Task<string> UploadImageAsync(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 throw new ArgumentException("No file provided.");
 
-            var containerName     = _configuration["AzureStorage:ContainerName"];
-            var connectionString  = _configuration["AzureStorage:ConnectionString"];
+            var (connectionString, containerName) = GetStorageSettings();
             var containerClient   = new BlobContainerClient(connectionString, containerName);
 
             await containerClient.CreateIfNotExistsAsync();
@@ -48,8 +64,7 @@ namespace CorpsAPI.Services
             var uri = new Uri(blobUrl);
             var blobName = Path.GetFileName(uri.LocalPath);
 
-            var containerName = _configuration["AzureStorage:ContainerName"];
-            var connectionString = _configuration["AzureStorage:ConnectionString"];
+            var (connectionString, containerName) = GetStorageSettings();
             var containerClient = new BlobContainerClient(connectionString, containerName);
             var blobClient = containerClient.GetBlobClient(blobName);
 

@@ -118,6 +118,15 @@ namespace CorpsAPI.Controllers
             return JsonSerializer.Serialize(normalized);
         }
 
+        private async Task DeleteEventImagesAsync(string? eventImageImgSrcRaw)
+        {
+            var urls = ParseEventImageUrls(eventImageImgSrcRaw);
+            foreach (var imageUrl in urls)
+            {
+                await _azureStorageService.DeleteImageAsync(imageUrl);
+            }
+        }
+
         // GET: api/Events
         [HttpGet]
         public async Task<IActionResult> GetEvents()
@@ -597,6 +606,52 @@ namespace CorpsAPI.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = SuccessMessages.EventCancelSuccessful });
+        }
+
+        [HttpPut("{id}/remove-listing")]
+        [Authorize(Roles = $"{Roles.EventManager},{Roles.Admin}")]
+        public async Task<IActionResult> RemoveListing(int id)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = ErrorMessages.InvalidRequest });
+
+            var ev = await _context.Events.FirstOrDefaultAsync(e => e.EventId == id);
+            if (ev == null)
+                return NotFound(new { message = ErrorMessages.EventNotFound });
+
+            if (ev.EventManagerId != userId && !User.IsInRole(Roles.Admin))
+                return Forbid();
+
+            if (ev.RequiresBooking || ev.Category == EventCategory.Bookable)
+            {
+                return BadRequest(new
+                {
+                    message = "Bookable events must be cancelled through the cancel action."
+                });
+            }
+
+            if (ev.Status == EventStatus.Concluded || ev.Status == EventStatus.Cancelled)
+                return Ok(new { message = "Listing already removed." });
+
+            try
+            {
+                await DeleteEventImagesAsync(ev.EventImageImgSrc);
+                ev.EventImageImgSrc = null;
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = "Failed to remove listing images from storage.",
+                    detail = ex.Message
+                });
+            }
+
+            ev.Status = EventStatus.Concluded;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Listing removed successfully." });
         }
 
         // Waitlist stuff

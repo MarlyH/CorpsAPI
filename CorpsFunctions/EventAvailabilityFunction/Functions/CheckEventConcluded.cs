@@ -1,9 +1,11 @@
 using CorpsAPI.Data;
 using CorpsAPI.Models;
+using CorpsAPI.Services;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 public class CheckEventConcluded
 {
@@ -14,6 +16,59 @@ public class CheckEventConcluded
     {
         _logger = loggerFactory.CreateLogger<CheckEventConcluded>();
         _configuration = configuration;
+    }
+
+    private static List<string> ParseEventImageUrls(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return new List<string>();
+
+        var trimmed = raw.Trim();
+        if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<string>>(trimmed);
+                if (parsed != null)
+                {
+                    return parsed
+                        .Where(url => !string.IsNullOrWhiteSpace(url))
+                        .Select(url => url.Trim())
+                        .ToList();
+                }
+            }
+            catch
+            {
+                // Backward compatibility: treat invalid JSON as a legacy single URL string.
+            }
+        }
+
+        return new List<string> { trimmed };
+    }
+
+    private async Task<bool> TryDeleteEventImagesAsync(string? eventImageImgSrcRaw)
+    {
+        var imageUrls = ParseEventImageUrls(eventImageImgSrcRaw);
+        if (imageUrls.Count == 0)
+            return true;
+
+        var storage = new AzureStorageService(_configuration);
+        var allDeleted = true;
+
+        foreach (var imageUrl in imageUrls)
+        {
+            try
+            {
+                await storage.DeleteImageAsync(imageUrl);
+            }
+            catch (Exception ex)
+            {
+                allDeleted = false;
+                _logger.LogWarning(ex, "Failed deleting event image blob: {ImageUrl}", imageUrl);
+            }
+        }
+
+        return allDeleted;
     }
 
     [Function("CheckEventConcluded")]
@@ -33,12 +88,13 @@ public class CheckEventConcluded
 
         var todayNz = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, nzTz));
 
-        var eventsToUpdate = await context.Events
-        .Where(e => e.StartDate < todayNz && e.Status == EventStatus.Available)
-        .Include(e => e.Bookings).ThenInclude(b => b.User)
-        .ToListAsync();
+        var bookableEventsToConclude = await context.Events
+            .Where(e => e.RequiresBooking && e.StartDate < todayNz && e.Status == EventStatus.Available)
+            .Include(e => e.Bookings)
+                .ThenInclude(b => b.User)
+            .ToListAsync();
 
-        foreach (var ev in eventsToUpdate)
+        foreach (var ev in bookableEventsToConclude)
         {
             // unattended before we mutate anything
             var unattended = ev.Bookings
@@ -84,10 +140,59 @@ public class CheckEventConcluded
             ev.Status = EventStatus.Concluded;
         }
 
+        // Non-bookable listing expiry:
+        // once listing period ends, remove from feeds and cleanup images from blob storage.
+        var contentEventsToConclude = await context.Events
+            .Where(e =>
+                !e.RequiresBooking &&
+                e.Status != EventStatus.Concluded &&
+                e.Status != EventStatus.Cancelled &&
+                ((e.EndDate.HasValue && e.EndDate.Value < todayNz) ||
+                 (!e.EndDate.HasValue && e.StartDate < todayNz)))
+            .ToListAsync();
+
+        var contentImageDeleteFailures = 0;
+        foreach (var ev in contentEventsToConclude)
+        {
+            var deleted = await TryDeleteEventImagesAsync(ev.EventImageImgSrc);
+            if (deleted)
+            {
+                ev.EventImageImgSrc = null;
+            }
+            else
+            {
+                contentImageDeleteFailures++;
+            }
+
+            ev.Status = EventStatus.Concluded;
+        }
+
+        // Retry cleanup for already-concluded non-bookable listings that still have image references.
+        var staleConcludedImageRefs = await context.Events
+            .Where(e =>
+                !e.RequiresBooking &&
+                e.Status == EventStatus.Concluded &&
+                !string.IsNullOrWhiteSpace(e.EventImageImgSrc))
+            .ToListAsync();
+
+        var staleCleanupSuccess = 0;
+        foreach (var ev in staleConcludedImageRefs)
+        {
+            if (await TryDeleteEventImagesAsync(ev.EventImageImgSrc))
+            {
+                ev.EventImageImgSrc = null;
+                staleCleanupSuccess++;
+            }
+        }
 
         await context.SaveChangesAsync();
 
-
-        _logger.LogInformation($"Concluded {eventsToUpdate.Count} events and applied strikes where applicable.");
+        _logger.LogInformation(
+            "Concluded {BookableCount} bookable events. Concluded {ContentCount} content listings (image delete failures: {ContentImageDeleteFailures}). Stale image cleanup successes: {StaleCleanupSuccess}.",
+            bookableEventsToConclude.Count,
+            contentEventsToConclude.Count,
+            contentImageDeleteFailures,
+            staleCleanupSuccess
+        );
     }
 }
