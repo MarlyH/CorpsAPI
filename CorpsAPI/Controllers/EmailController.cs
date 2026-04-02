@@ -44,7 +44,7 @@ namespace CorpsAPI.Controllers
             var url = $"{serverUrl}/api/email/confirm-email-change?userId={user.Id}&newEmail={WebUtility.UrlEncode(dto.NewEmail)}&token={encodedToken}";
 
             var appName = "Your Corps";
-            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png/v1/fill/w_331,h_78,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png";
             var htmlBody = EmailConfirmChangeTemplate.ConfirmEmailChangeHtml(
                 appName: appName,
                 currentEmail: user.Email ?? "",
@@ -74,7 +74,7 @@ namespace CorpsAPI.Controllers
             // await _userManager.UpdateAsync(user);
 
             var appName = "Your Corps";
-            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png/v1/fill/w_331,h_78,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png";
             var appLink = (_configuration["AppDeepLink"] ?? _configuration["ClientUrl"] ?? "").Trim();
 
             var html = EmailConfirmedChangeTemplate.EmailChangeConfirmedHtml(

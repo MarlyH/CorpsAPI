@@ -134,7 +134,7 @@ namespace CorpsAPI.Controllers
             var serverUrl = _configuration["ServerUrl"];
             var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
             var appName = "Your Corps";
-            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png/v1/fill/w_331,h_78,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png";
 
             var htmlBody = EmailTemplates.ConfirmEmailHtml(
                 appName: appName,
@@ -222,7 +222,7 @@ namespace CorpsAPI.Controllers
             // Brand settings
             var appName = "Your Corps";
             // public logo you shared
-            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png/v1/fill/w_331,h_78,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png";
             // optional: a landing page or app deep link (set to your site/home if you have one)
             var appLink = (_configuration["AppDeepLink"] ?? _configuration["ClientUrl"] ?? "").Trim();
 
@@ -375,7 +375,7 @@ namespace CorpsAPI.Controllers
 
             // send email
             var appName = "Your Corps";
-            var logoUrl = "https://static.wixstatic.com/media/ff8734_0e11ba81866b4340a9ba8d912f1a5423~mv2.png/v1/fill/w_542,h_112,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/YOURCORPS_THIN%20copy.png";
+            var logoUrl = "https://static.wixstatic.com/media/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png/v1/fill/w_331,h_78,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png";
 
             var htmlBody = EmailTemplates.ConfirmEmailHtml(
                 appName: appName,
