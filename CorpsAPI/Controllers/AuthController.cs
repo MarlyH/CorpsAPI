@@ -130,7 +130,7 @@ namespace CorpsAPI.Controllers
 
             // Email confirm flow (unchanged)
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var encodedToken = Uri.EscapeDataString(token);
+            var encodedToken = WebUtility.UrlEncode(token);
             var serverUrl = _configuration["ServerURL"];
             var confirmationUrl = $"https://yourcorps.co.nz/confirm-email?userId={user.Id}&token={encodedToken}";
             var appName = "Your Corps";
@@ -213,8 +213,7 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.FindByIdAsync(dto.UserId);
             if (user == null) return BadRequest();
 
-            var decodedToken = Uri.UnescapeDataString(dto.Token); 
-            var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
+            var result = await _userManager.ConfirmEmailAsync(user, dto.Token);
             if (!result.Succeeded) return BadRequest();
 
             return Ok();
@@ -237,9 +236,9 @@ namespace CorpsAPI.Controllers
 
             // generate email verification token
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var encodedToken = Uri.EscapeDataString(token);
+            var encodedToken = WebUtility.UrlEncode(token);
             var serverUrl = _configuration["ServerUrl"];
-            var confirmationUrl = $"https://yourcorps.co.nz/confirm-email?userId={user.Id}&token={encodedToken}";
+            var confirmationUrl = $"{serverUrl}/api/auth/confirm-email?userId={user.Id}&token={encodedToken}";
 
             // send email
             var appName = "Your Corps";
