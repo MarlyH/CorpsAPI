@@ -12,6 +12,7 @@ using Microsoft.OpenApi.Models;
 using System.Configuration;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace CorpsAPI
 {
@@ -28,6 +29,10 @@ namespace CorpsAPI
             // register DbContext with SQL Server
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo("/home/keys"))
+                .SetApplicationName("CorpsAPI");
 
             // Add default Identity services with role management
             builder.Services.AddDefaultIdentity<AppUser>(options => {
@@ -106,7 +111,7 @@ namespace CorpsAPI
                     }
                 });
             });
-
+                
             var app = builder.Build();
 
             // seed data
