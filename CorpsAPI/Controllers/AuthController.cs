@@ -133,7 +133,7 @@ namespace CorpsAPI.Controllers
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
             var encodedToken = WebUtility.UrlEncode(token);
             var websiteUrl = _configuration["WebsiteUrl"];
-            var confirmationUrl = $"{websiteUrl}/confirm-email?userId={user.Id}&token={encodedToken}";
+            var confirmationUrl = $"{websiteUrl}/confirm-email?userId={user.Id}&token={token}";
             var appName = "Your Corps";
             var logoUrl = "https://static.wixstatic.com/media/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png/v1/fill/w_331,h_78,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/ff8734_f5c511e7dd7a487786c07b07d5a8cadc~mv2.png";
 
