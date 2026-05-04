@@ -149,7 +149,7 @@ namespace CorpsAPI.Controllers
                 user.Email,
                 $"{appName} – Verify your email",
                 htmlBody
-            );
+            ); 
 
             _memoryCache.Set($"confirm:{user.Email}", true, TimeSpan.FromDays(1));
 
@@ -214,8 +214,8 @@ namespace CorpsAPI.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound(ErrorMessages.InvalidRequest);
 
-            var expiredResult = _memoryCache.TryGetValue($"confirm:{user.Email}", out _);
-            if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
+            // var expiredResult = _memoryCache.TryGetValue($"confirm:{user.Email}", out _);
+            // if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
 
             var result = await _userManager.ConfirmEmailAsync(user, token);
             if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
