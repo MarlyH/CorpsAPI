@@ -219,8 +219,14 @@ namespace CorpsAPI.Controllers
             // if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
             var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
 
+            // var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
+            // if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
             var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
-            if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                return BadRequest(new { message = ErrorMessages.EmailConfirmationFailed, debug = errors });
+            }
 
             return Ok(new { message = "Email successfully verified." });
         }
