@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace CorpsAPI.Controllers
 {
@@ -131,7 +132,7 @@ namespace CorpsAPI.Controllers
 
             // Email confirm flow
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var encodedToken = WebUtility.UrlEncode(token);
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
             var websiteUrl = _configuration["WebsiteUrl"];
             var confirmationUrl = $"{websiteUrl}/confirm-email?userId={user.Id}&token={encodedToken}";
             var appName = "Your Corps";
@@ -216,7 +217,7 @@ namespace CorpsAPI.Controllers
 
             // var expiredResult = _memoryCache.TryGetValue($"confirm:{user.Email}", out _);
             // if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
-            var decodedToken = WebUtility.UrlDecode(token);
+            var decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
 
             var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
             if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
