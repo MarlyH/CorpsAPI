@@ -216,8 +216,9 @@ namespace CorpsAPI.Controllers
 
             // var expiredResult = _memoryCache.TryGetValue($"confirm:{user.Email}", out _);
             // if (!expiredResult) return BadRequest(ErrorMessages.EmailConfirmationExpired);
+            var decodedToken = WebUtility.UrlDecode(token);
 
-            var result = await _userManager.ConfirmEmailAsync(user, token);
+            var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
             if (!result.Succeeded) return BadRequest(ErrorMessages.EmailConfirmationFailed);
 
             return Ok(new { message = "Email successfully verified." });
